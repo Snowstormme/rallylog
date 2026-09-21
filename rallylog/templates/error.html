@@ -1,0 +1,5 @@
+{% extends 'base.html' %}
+{% block title %}Page unavailable{% endblock %}
+{% block content %}
+<div class="container error-page"><p class="eyebrow">POINT INTERRUPTED</p><h1>{{ code }}<span>.</span></h1><p>{% if code == 404 %}This page is outside the lines.{% elif code == 403 %}You don't have access to that page.{% elif code == 400 %}That request couldn't be completed. Reload the page and try again.{% else %}Something went wrong on our side. Please try again shortly.{% endif %}</p><a class="button" href="{{ url_for('site.home') }}">Back to the court ↗</a></div>
+{% endblock %}
