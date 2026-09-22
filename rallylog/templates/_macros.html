@@ -6,3 +6,15 @@
   <div class="match-card-bottom"><span>{{ match.score }}</span>{% if review %}<span class="card-rating">★ {{ '%.1f'|format(review.rating_half / 2) if review.rating_half else 'Logged' }}</span>{% else %}<span class="card-arrow" aria-hidden="true">↗</span>{% endif %}</div>
 </a>
 {% endmacro %}
+
+{% macro report_form(target, target_id) %}
+<details class="report-control"><summary>Report</summary>
+  <form method="post" action="{{ url_for('site.report_content') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="target" value="{{ target }}">
+    <input type="hidden" name="target_id" value="{{ target_id }}">
+    <label>Reason<select name="reason" required><option value="spam">Spam</option><option value="harassment">Harassment</option><option value="hate">Hate</option><option value="other">Other</option></select></label>
+    <button class="quiet-button" type="submit">Send report</button>
+  </form>
+</details>
+{% endmacro %}

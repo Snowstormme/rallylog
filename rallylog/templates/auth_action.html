@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+{% block title %}{{ {'check': 'Check your email', 'resend': 'Verify your email', 'verify': 'Verify your email', 'forgot': 'Reset your password', 'reset': 'Choose a new password'}[mode] }}{% endblock %}
+{% block content %}
+<section class="auth-wrap">
+  <div class="auth-side"><p class="eyebrow">YOUR COURTSIDE ACCOUNT</p><h1>Keep your diary<br><em>in your hands.</em></h1><p>Your match notes and ratings are saved to your account.</p><div class="auth-court" aria-hidden="true"><span></span><span></span></div></div>
+  <div class="auth-card">
+    {% if mode == 'check' %}
+      <p class="eyebrow">ONE MORE STEP</p><h2>Check your email</h2><p class="auth-intro">Open the Rallylog verification link we sent you. It expires after 24 hours.</p><p class="auth-switch"><a href="{{ url_for('site.resend_verification') }}">Send another link</a> · <a href="{{ url_for('site.login') }}">Log in</a></p>
+    {% elif mode == 'resend' or mode == 'forgot' %}
+      <p class="eyebrow">ACCOUNT ACCESS</p><h2>{{ 'Send a new link' if mode == 'resend' else 'Reset password' }}</h2><p class="auth-intro">{{ 'Enter the email address you registered with.' if mode == 'resend' else 'We will email a password reset link if the address belongs to an account.' }}</p>
+      <form method="post" class="stack-form"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><label>Email<input type="email" name="email" autocomplete="email" required></label><button class="button" type="submit">Send link ↗</button></form>
+      <p class="auth-switch"><a href="{{ url_for('site.login') }}">Back to log in</a></p>
+    {% elif mode == 'verify' %}
+      <p class="eyebrow">CONFIRM YOUR ADDRESS</p><h2>Verify email</h2><p class="auth-intro">Confirm that you want to use this email address for your Rallylog account.</p><form method="post" class="stack-form"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="button" type="submit">Verify my email ↗</button></form>
+    {% elif mode == 'reset' %}
+      <p class="eyebrow">ACCOUNT ACCESS</p><h2>New password</h2><p class="auth-intro">Choose a new password with at least 10 characters. Existing sessions will be signed out.</p><form method="post" class="stack-form"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><label>New password<input type="password" name="password" autocomplete="new-password" minlength="10" maxlength="128" required></label><button class="button" type="submit">Change password ↗</button></form>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

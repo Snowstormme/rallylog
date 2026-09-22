@@ -1,0 +1,37 @@
+name: Encrypted database backup
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    if: ${{ vars.BACKUPS_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    container: postgres:18-bookworm
+    steps:
+      - name: Install encryption tool
+        run: apt-get update -qq && apt-get install -y -qq age
+      - name: Dump and encrypt
+        env:
+          DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+          BACKUP_RECIPIENT: ${{ vars.BACKUP_RECIPIENT }}
+        run: |
+          set -eu
+          test -n "$DATABASE_URL"
+          test -n "$BACKUP_RECIPIENT"
+          export PGSSLMODE=require
+          trap 'rm -f /tmp/rallylog.dump' EXIT
+          pg_dump --dbname="$DATABASE_URL" --format=custom --no-owner --no-acl --file=/tmp/rallylog.dump
+          age -r "$BACKUP_RECIPIENT" -o rallylog.dump.age /tmp/rallylog.dump
+          test -s rallylog.dump.age
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rallylog-backup-${{ github.run_id }}
+          path: rallylog.dump.age
+          if-no-files-found: error
+          retention-days: 30

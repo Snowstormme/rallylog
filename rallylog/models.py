@@ -1,14 +1,19 @@
 from datetime import datetime, timezone
 
+from argon2 import PasswordHasher
+from argon2.exceptions import InvalidHashError, VerificationError
 from flask_login import UserMixin
 from sqlalchemy import CheckConstraint, UniqueConstraint
-from werkzeug.security import check_password_hash, generate_password_hash
+from werkzeug.security import check_password_hash
 
 from . import db
 
 
 def utcnow():
     return datetime.now(timezone.utc)
+
+
+PASSWORD_HASHER = PasswordHasher(time_cost=2, memory_cost=19456, parallelism=1)
 
 
 class User(UserMixin, db.Model):
@@ -20,12 +25,45 @@ class User(UserMixin, db.Model):
     bio = db.Column(db.String(280), default="", nullable=False)
     created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
     reviews = db.relationship("Review", back_populates="user", cascade="all, delete-orphan")
+    reports = db.relationship("Report", back_populates="reporter", cascade="all, delete-orphan")
+    auth_state = db.relationship("AuthState", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    auth_tokens = db.relationship("AuthToken", back_populates="user", cascade="all, delete-orphan")
 
     def set_password(self, password):
-        self.password_hash = generate_password_hash(password)
+        self.password_hash = PASSWORD_HASHER.hash(password)
 
     def check_password(self, password):
+        if self.password_hash.startswith("$argon2id$"):
+            try:
+                return PASSWORD_HASHER.verify(self.password_hash, password)
+            except (InvalidHashError, VerificationError):
+                return False
         return check_password_hash(self.password_hash, password)
+
+    def get_id(self):
+        version = self.auth_state.session_version if self.auth_state else 0
+        return f"{self.id}:{version}"
+
+
+class AuthState(db.Model):
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), primary_key=True)
+    email_verified_at = db.Column(db.DateTime(timezone=True))
+    session_version = db.Column(db.Integer, default=0, nullable=False)
+    user = db.relationship("User", back_populates="auth_state")
+
+
+class AuthToken(db.Model):
+    digest = db.Column(db.String(64), primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    purpose = db.Column(db.String(16), nullable=False)
+    expires_at = db.Column(db.BigInteger, nullable=False)
+    user = db.relationship("User", back_populates="auth_tokens")
+
+
+class RateLimitEvent(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    key_hash = db.Column(db.String(64), nullable=False, index=True)
+    created_at = db.Column(db.BigInteger, nullable=False, index=True)
 
 
 class Player(db.Model):
@@ -97,6 +135,7 @@ class Review(db.Model):
     user = db.relationship("User", back_populates="reviews")
     match = db.relationship("Match", back_populates="reviews")
     comments = db.relationship("Comment", back_populates="review", cascade="all, delete-orphan")
+    reports = db.relationship("Report", back_populates="review", cascade="all, delete-orphan")
 
 
 class Comment(db.Model):
@@ -107,6 +146,23 @@ class Comment(db.Model):
     created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
     review = db.relationship("Review", back_populates="comments")
     user = db.relationship("User")
+    reports = db.relationship("Report", back_populates="comment", cascade="all, delete-orphan")
+
+
+class Report(db.Model):
+    __table_args__ = (
+        CheckConstraint("(review_id IS NULL) <> (comment_id IS NULL)", name="one_report_target"),
+    )
+    id = db.Column(db.Integer, primary_key=True)
+    reporter_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    review_id = db.Column(db.Integer, db.ForeignKey("review.id"), index=True)
+    comment_id = db.Column(db.Integer, db.ForeignKey("comment.id"), index=True)
+    reason = db.Column(db.String(20), nullable=False)
+    status = db.Column(db.String(12), default="open", nullable=False, index=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    reporter = db.relationship("User", back_populates="reports")
+    review = db.relationship("Review", back_populates="reports")
+    comment = db.relationship("Comment", back_populates="reports")
 
 
 class FollowedPlayer(db.Model):

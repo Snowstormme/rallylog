@@ -3,14 +3,16 @@ import re
 from datetime import date, datetime, timedelta, timezone
 from urllib.parse import urlsplit
 
-from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request, session, url_for
+import requests
+from flask import Blueprint, abort, current_app, flash, jsonify, redirect, render_template, request, session, url_for
 from flask_login import current_user, login_required, login_user, logout_user
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import aliased, joinedload
 
 from . import db
-from .models import Comment, FollowedPlayer, Match, Player, Review, User, WatchlistItem
+from .models import AuthState, AuthToken, Comment, FollowedPlayer, Match, Player, Report, Review, User, WatchlistItem, utcnow
 from .prize_money import update_prize_money
+from .security import client_ip, limit_action, send_account_email, valid_token
 from .stats import community_statistics, diary_statistics, percent, player_statistics
 
 site = Blueprint("site", __name__)
@@ -213,9 +215,12 @@ def follow_player(player_id):
 
 @site.route("/register", methods=["GET", "POST"])
 def register():
+    if not current_app.config["REGISTRATION_ENABLED"]:
+        abort(503)
     if current_user.is_authenticated:
         return redirect(url_for("site.my_profile"))
     if request.method == "POST":
+        limit_action("register-ip", client_ip(), 5, 3600)
         username = request.form.get("username", "").strip().lower()
         email = request.form.get("email", "").strip().lower()
         password = request.form.get("password", "")
@@ -230,8 +235,19 @@ def register():
         else:
             user = User(username=username, email=email, display_name=username)
             user.set_password(password)
+            user.auth_state = AuthState(
+                email_verified_at=None if current_app.config["REQUIRE_EMAIL_VERIFICATION"] else utcnow()
+            )
             db.session.add(user)
             db.session.commit()
+            if current_app.config["REQUIRE_EMAIL_VERIFICATION"]:
+                try:
+                    send_account_email(user, "verify")
+                    flash("Check your email to verify your account before logging in.", "success")
+                except requests.RequestException:
+                    current_app.logger.exception("Verification email delivery failed")
+                    flash("We could not send your email. Use the resend link shortly.", "error")
+                return redirect(url_for("site.check_email"))
             session.clear()
             login_user(user)
             flash("Welcome to Rallylog. Your diary is ready.", "success")
@@ -246,15 +262,109 @@ def login():
     if request.method == "POST":
         identity = request.form.get("identity", "").strip().lower()
         password = request.form.get("password", "")
+        limit_action("login-ip", client_ip(), 20, 900)
+        limit_action("login-identity", identity[:255], 8, 900)
         user = db.session.scalar(
             select(User).where(or_(User.username == identity, User.email == identity))
         )
-        if user and user.check_password(password):
+        if user and len(password) <= 128 and user.check_password(password):
+            if current_app.config["REQUIRE_EMAIL_VERIFICATION"] and (
+                user.auth_state is None or user.auth_state.email_verified_at is None
+            ):
+                flash("Verify your email before logging in.", "error")
+                return redirect(url_for("site.check_email"))
+            if not user.password_hash.startswith("$argon2id$"):
+                user.set_password(password)
+                db.session.commit()
             session.clear()
             login_user(user)
             return redirect(safe_next("site.my_profile"))
         flash("Incorrect username, email or password.", "error")
     return render_template("auth.html", mode="login")
+
+
+@site.get("/check-email")
+def check_email():
+    return render_template("auth_action.html", mode="check")
+
+
+@site.route("/resend-verification", methods=["GET", "POST"])
+def resend_verification():
+    if not (current_app.config["RESEND_API_KEY"] or current_app.config.get("MAIL_DELIVERY")):
+        abort(503)
+    if request.method == "POST":
+        limit_action("resend-ip", client_ip(), 5, 3600)
+        email = request.form.get("email", "").strip().lower()[:255]
+        user = db.session.scalar(select(User).where(User.email == email))
+        if user and (not user.auth_state or not user.auth_state.email_verified_at):
+            try:
+                send_account_email(user, "verify")
+            except requests.RequestException:
+                current_app.logger.exception("Verification email delivery failed")
+        flash("If this address needs verification, a new link has been sent.", "success")
+        return redirect(url_for("site.check_email"))
+    return render_template("auth_action.html", mode="resend")
+
+
+@site.route("/verify-email/<token>", methods=["GET", "POST"])
+def verify_email(token):
+    saved = valid_token(token, "verify")
+    if saved is None:
+        flash("This verification link has expired. Request a new one.", "error")
+        return redirect(url_for("site.resend_verification"))
+    if request.method == "POST":
+        user = saved.user
+        if user.auth_state is None:
+            user.auth_state = AuthState(session_version=0)
+        user.auth_state.email_verified_at = utcnow()
+        db.session.delete(saved)
+        db.session.commit()
+        flash("Email verified. You can log in now.", "success")
+        return redirect(url_for("site.login"))
+    return render_template("auth_action.html", mode="verify", token=token)
+
+
+@site.route("/forgot-password", methods=["GET", "POST"])
+def forgot_password():
+    if not (current_app.config["RESEND_API_KEY"] or current_app.config.get("MAIL_DELIVERY")):
+        abort(503)
+    if request.method == "POST":
+        limit_action("reset-ip", client_ip(), 5, 3600)
+        email = request.form.get("email", "").strip().lower()[:255]
+        user = db.session.scalar(select(User).where(User.email == email))
+        if user:
+            try:
+                send_account_email(user, "reset")
+            except requests.RequestException:
+                current_app.logger.exception("Password reset email delivery failed")
+        flash("If an account uses this address, a reset link has been sent.", "success")
+        return redirect(url_for("site.login"))
+    return render_template("auth_action.html", mode="forgot")
+
+
+@site.route("/reset-password/<token>", methods=["GET", "POST"])
+def reset_password(token):
+    saved = valid_token(token, "reset")
+    if saved is None:
+        flash("This reset link has expired. Request a new one.", "error")
+        return redirect(url_for("site.forgot_password"))
+    if request.method == "POST":
+        limit_action("reset-submit-ip", client_ip(), 10, 3600)
+        password = request.form.get("password", "")
+        if not 10 <= len(password) <= 128:
+            flash("Use a password with 10–128 characters.", "error")
+        else:
+            user = saved.user
+            user.set_password(password)
+            if user.auth_state is None:
+                user.auth_state = AuthState(session_version=0)
+            user.auth_state.session_version += 1
+            db.session.execute(delete(AuthToken).where(AuthToken.user_id == user.id))
+            db.session.commit()
+            session.clear()
+            flash("Password changed. Log in with your new password.", "success")
+            return redirect(url_for("site.login"))
+    return render_template("auth_action.html", mode="reset", token=token)
 
 
 @site.post("/logout")
@@ -311,16 +421,26 @@ def settings():
         bio = request.form.get("bio", "").strip()
         current_password = request.form.get("current_password", "")
         new_password = request.form.get("new_password", "")
+        if new_password:
+            limit_action("password-change", str(current_user.id), 5, 3600)
         if not 1 <= len(display_name) <= 60 or len(bio) > 280:
             flash("Display name or bio is too long.", "error")
-        elif new_password and (not current_user.check_password(current_password) or len(new_password) < 10):
-            flash("Check your current password; the new one needs at least 10 characters.", "error")
+        elif new_password and (
+            not current_user.check_password(current_password) or not 10 <= len(new_password) <= 128
+        ):
+            flash("Check your current password; the new one needs 10–128 characters.", "error")
         else:
             current_user.display_name = display_name
             current_user.bio = bio
             if new_password:
                 current_user.set_password(new_password)
+                if current_user.auth_state is None:
+                    current_user.auth_state = AuthState(session_version=0)
+                current_user.auth_state.session_version += 1
             db.session.commit()
+            if new_password:
+                session.clear()
+                login_user(current_user)
             flash("Settings saved.", "success")
             return redirect(url_for("site.settings"))
     return render_template("settings.html")
@@ -386,6 +506,7 @@ def export_diary():
 @site.post("/settings/delete-account")
 @login_required
 def delete_account():
+    limit_action("account-delete", str(current_user.id), 5, 3600)
     if (
         request.form.get("username", "").strip().lower() != current_user.username
         or not current_user.check_password(request.form.get("password", ""))
@@ -499,6 +620,79 @@ def delete_comment(comment_id):
     return redirect(url_for("site.match_detail", match_id=match_id) + f"#review-{review_id}")
 
 
+@site.post("/reports")
+@login_required
+def report_content():
+    limit_action("report-user", str(current_user.id), 10, 86400)
+    target = request.form.get("target", "")
+    reason = request.form.get("reason", "")
+    if reason not in {"spam", "harassment", "hate", "other"}:
+        abort(400)
+    if target == "review":
+        review = db.get_or_404(Review, request.form.get("target_id", type=int))
+        if not review.is_public:
+            abort(404)
+        match_id = review.match_id
+        condition = (Report.reporter_id == current_user.id, Report.review_id == review.id)
+        report = Report(reporter_id=current_user.id, review_id=review.id, reason=reason)
+    elif target == "comment":
+        comment = db.get_or_404(Comment, request.form.get("target_id", type=int))
+        if not comment.review.is_public:
+            abort(404)
+        match_id = comment.review.match_id
+        condition = (Report.reporter_id == current_user.id, Report.comment_id == comment.id)
+        report = Report(reporter_id=current_user.id, comment_id=comment.id, reason=reason)
+    else:
+        abort(400)
+    if db.session.scalar(select(Report.id).where(*condition, Report.status == "open")) is None:
+        db.session.add(report)
+        db.session.commit()
+    flash("Thank you. This report is queued for review.", "success")
+    return redirect(url_for("site.match_detail", match_id=match_id))
+
+
+def require_moderator():
+    state = current_user.auth_state if current_user.is_authenticated else None
+    if (
+        not current_user.is_authenticated
+        or current_user.email != current_app.config["ADMIN_EMAIL"]
+        or not state or not state.email_verified_at
+    ):
+        abort(403)
+
+
+@site.get("/moderation")
+@login_required
+def moderation():
+    require_moderator()
+    reports = db.session.scalars(
+        select(Report).where(Report.status == "open")
+        .order_by(Report.created_at.asc()).limit(100)
+    ).all()
+    return render_template("moderation.html", reports=reports)
+
+
+@site.post("/moderation/reports/<int:report_id>/<action>")
+@login_required
+def moderate_report(report_id, action):
+    require_moderator()
+    report = db.get_or_404(Report, report_id)
+    if action == "dismiss":
+        report.status = "dismissed"
+    elif action == "remove":
+        target = report.review or report.comment
+        db.session.delete(target)
+    else:
+        abort(400)
+    db.session.commit()
+    return redirect(url_for("site.moderation"))
+
+
 @site.get("/about")
 def about():
     return render_template("about.html")
+
+
+@site.get("/privacy")
+def privacy():
+    return render_template("privacy.html")

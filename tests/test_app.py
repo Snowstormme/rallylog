@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 
 from rallylog import create_app, db
-from rallylog.models import Comment, FollowedPlayer, Match, Player, Review, User, WatchlistItem
+from rallylog.models import Comment, FollowedPlayer, Match, Player, Report, Review, User, WatchlistItem
 from sqlalchemy import select
 
 
@@ -38,7 +38,7 @@ class RallylogFlows(unittest.TestCase):
         }, follow_redirects=True)
 
     def test_core_pages_and_search(self):
-        for path in ("/", "/matches", "/players", "/about", f"/matches/{self.match_id}"):
+        for path in ("/", "/matches", "/players", "/about", "/privacy", f"/matches/{self.match_id}"):
             self.assertEqual(self.client.get(path).status_code, 200, path)
         self.assertIn(b"Jannik Sinner", self.client.get("/matches?q=Jannik+Sinner").data)
         self.assertEqual(self.client.get("/matches?tour=WTA").status_code, 200)
@@ -171,7 +171,7 @@ class RallylogFlows(unittest.TestCase):
         })
         export = self.client.get("/settings/export")
         self.assertEqual(export.status_code, 200)
-        self.assertEqual(export.headers["Cache-Control"], "no-store")
+        self.assertIn("no-store", export.headers["Cache-Control"])
         data = export.get_json()
         self.assertEqual(data["email"], "alice@example.com")
         self.assertEqual(data["diary"][0]["rating_out_of_five"], 4.5)
@@ -196,6 +196,39 @@ class RallylogFlows(unittest.TestCase):
             self.assertIsNone(db.session.scalar(select(FollowedPlayer.id)))
             self.assertIsNone(db.session.scalar(select(WatchlistItem.id)))
         self.assertEqual(self.client.get("/settings/export").status_code, 302)
+
+    def test_reports_are_moderated_by_verified_admin(self):
+        self.app.config["ADMIN_EMAIL"] = "alice@example.com"
+        self.register("alice")
+        self.client.post(f"/matches/{self.match_id}/log", data={
+            "csrf_token": self.token(), "watched_on": "2025-01-30",
+            "body": "A public review", "public": "on",
+        })
+        with self.app.app_context():
+            review_id = db.session.scalar(select(Review.id))
+        self.client.post("/logout", data={"csrf_token": self.token()})
+        self.register("bob")
+        self.assertIn(b"Report", self.client.get(f"/matches/{self.match_id}").data)
+        response = self.client.post("/reports", data={
+            "csrf_token": self.token(), "target": "review",
+            "target_id": str(review_id), "reason": "spam",
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(self.client.get("/moderation").status_code, 403)
+        with self.app.app_context():
+            report_id = db.session.scalar(select(Report.id))
+        self.client.post("/logout", data={"csrf_token": self.token()})
+        self.client.get("/login")
+        self.client.post("/login", data={
+            "csrf_token": self.token(), "identity": "alice", "password": "long-test-password",
+        })
+        self.assertIn(b"A public review", self.client.get("/moderation").data)
+        self.client.post(f"/moderation/reports/{report_id}/remove", data={
+            "csrf_token": self.token(),
+        })
+        with self.app.app_context():
+            self.assertIsNone(db.session.scalar(select(Review.id)))
+            self.assertIsNone(db.session.scalar(select(Report.id)))
 
 
 if __name__ == "__main__":

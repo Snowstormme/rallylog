@@ -1,0 +1,24 @@
+name: Initialize production database
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  initialize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Create schema and seed match catalog
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_OWNER_URL }}
+          AUTO_CREATE_DB: "false"
+          SEED_FULL_CATALOG: "true"
+        run: flask --app wsgi init-db

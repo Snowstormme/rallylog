@@ -5,4 +5,6 @@ __pycache__/
 .env
 instance/
 *.db
+*.dump
+*.dump.age
 .DS_Store

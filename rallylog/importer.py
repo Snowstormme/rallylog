@@ -1,13 +1,14 @@
 """Import match records from the non-commercial Sackmann dataset archive."""
 
 import csv
+import gzip
 import json
-from datetime import datetime
+from datetime import date as date_type, datetime
 from io import StringIO
 from pathlib import Path
 
 import requests
-from sqlalchemy import select
+from sqlalchemy import insert, select
 
 from . import db
 from .models import Match, Player
@@ -15,6 +16,7 @@ from .models import Match, Player
 ARCHIVE = "https://raw.githubusercontent.com/Aneeshers/tennis-sackmann-archive/main"
 SAMPLE_FILE = Path(__file__).resolve().parent.parent / "data" / "sample_matches.json"
 SAMPLE_PLAYERS_FILE = Path(__file__).resolve().parent.parent / "data" / "sample_players.json"
+CATALOG_FILE = Path(__file__).resolve().parent.parent / "data" / "catalog_2023_2026.json.gz"
 
 
 def number(value):
@@ -134,6 +136,24 @@ def seed_samples():
     bios = json.loads(SAMPLE_PLAYERS_FILE.read_text(encoding="utf-8"))
     for tour in ("ATP", "WTA"):
         import_rows(tour, [row for row in samples if row["tour"] == tour], bios[tour])
+
+
+def seed_catalog():
+    """Load the attributed offline catalog once on a fresh production database."""
+    if db.session.scalar(select(Match.id).limit(1)) is not None:
+        return
+    if not CATALOG_FILE.exists():
+        raise RuntimeError("Bundled match catalog is missing.")
+    with gzip.open(CATALOG_FILE, "rt", encoding="utf-8") as source:
+        catalog = json.load(source)
+    for player in catalog["players"]:
+        if player.get("born_on"):
+            player["born_on"] = date_type.fromisoformat(player["born_on"])
+    for match in catalog["matches"]:
+        match["week_start"] = date_type.fromisoformat(match["week_start"])
+    db.session.execute(insert(Player), catalog["players"])
+    db.session.execute(insert(Match), catalog["matches"])
+    db.session.commit()
 
 
 def import_archive(from_year, to_year):

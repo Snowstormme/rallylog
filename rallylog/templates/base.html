@@ -24,10 +24,10 @@
       </nav>
       <div class="header-actions">
         {% if current_user.is_authenticated %}
-          <a class="header-profile" href="{{ url_for('site.my_profile') }}"><span class="mini-avatar">{{ current_user.display_name[0]|upper }}</span><span>My diary</span></a>
+          {% if config.ADMIN_EMAIL and current_user.email == config.ADMIN_EMAIL %}<a class="header-login" href="{{ url_for('site.moderation') }}">Reports</a>{% endif %}<a class="header-profile" href="{{ url_for('site.my_profile') }}"><span class="mini-avatar">{{ current_user.display_name[0]|upper }}</span><span>My diary</span></a>
         {% else %}
           <a class="header-login" href="{{ url_for('site.login') }}">Log in</a>
-          <a class="button button-small" href="{{ url_for('site.register') }}">Join Rallylog</a>
+          {% if config.REGISTRATION_ENABLED %}<a class="button button-small" href="{{ url_for('site.register') }}">Join Rallylog</a>{% endif %}
         {% endif %}
       </div>
     </div>
@@ -39,7 +39,7 @@
   <footer class="site-footer">
     <div class="container footer-inner">
       <div><a class="footer-brand" href="{{ url_for('site.home') }}">RALLYLOG<span>.</span></a><p>A place for the matches that stayed with you.</p></div>
-      <div class="footer-links"><a href="{{ url_for('site.about') }}">About & data</a><a href="{{ url_for('site.matches') }}">Explore matches</a><a href="{{ url_for('site.players') }}">Explore players</a></div>
+      <div class="footer-links"><a href="{{ url_for('site.about') }}">About & data</a><a href="{{ url_for('site.privacy') }}">Privacy</a><a href="{{ url_for('site.matches') }}">Explore matches</a><a href="{{ url_for('site.players') }}">Explore players</a></div>
       <p class="data-credit">Match data: Jeff Sackmann / Tennis Abstract, <a href="https://github.com/Aneeshers/tennis-sackmann-archive" target="_blank" rel="noopener noreferrer">CC BY-NC-SA 4.0 archive</a>. Non-commercial project. Data coverage is explained on the <a href="{{ url_for('site.about') }}">About page</a>.</p>
     </div>
   </footer>

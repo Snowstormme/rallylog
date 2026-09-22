@@ -1,18 +1,29 @@
 import os
 import secrets
+from datetime import timedelta
 from pathlib import Path
 
 import click
-from flask import Flask, render_template, session
+from flask import Flask, current_app, render_template, request, session
+from flask_login import current_user
 from flask_login import LoginManager
 from flask_sqlalchemy import SQLAlchemy
 from dotenv import load_dotenv
+from sqlalchemy import event, text
+from sqlalchemy.engine import Engine, make_url
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 load_dotenv()
 
 db = SQLAlchemy()
 login_manager = LoginManager()
 login_manager.login_view = "site.login"
+
+
+@event.listens_for(Engine, "connect")
+def enforce_sqlite_foreign_keys(connection, _record):
+    if connection.__class__.__module__.startswith("sqlite3"):
+        connection.execute("PRAGMA foreign_keys=ON")
 
 
 def create_app(test_config=None):
@@ -25,6 +36,15 @@ def create_app(test_config=None):
         database_url = database_url.replace("postgres://", "postgresql://", 1)
     if database_url and database_url.startswith("postgresql://"):
         database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
+    production = os.environ.get("APP_ENV") == "production"
+    if production and database_url and database_url.startswith("postgresql+psycopg://"):
+        parsed = make_url(database_url)
+        mode = parsed.query.get("sslmode", "require")
+        if mode not in ("require", "verify-ca", "verify-full"):
+            raise RuntimeError("Production PostgreSQL must require TLS.")
+        database_url = str(parsed.update_query_dict({"sslmode": mode}))
+
+    public_host = os.environ.get("PUBLIC_HOST") or os.environ.get("RENDER_EXTERNAL_HOSTNAME")
 
     app.config.update(
         SECRET_KEY=os.environ.get("SECRET_KEY") or secrets.token_hex(32),
@@ -32,11 +52,46 @@ def create_app(test_config=None):
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
-        SESSION_COOKIE_SECURE=os.environ.get("APP_ENV") == "production",
+        SESSION_COOKIE_SECURE=production,
+        PERMANENT_SESSION_LIFETIME=timedelta(days=7),
+        TRUSTED_HOSTS=[public_host] if production and public_host else None,
+        PUBLIC_BASE_URL=f"https://{public_host}" if production and public_host else "http://127.0.0.1:5000",
+        REQUIRE_EMAIL_VERIFICATION=production,
+        REGISTRATION_ENABLED=os.environ.get("REGISTRATION_ENABLED", "true") == "true",
+        RESEND_API_KEY=os.environ.get("RESEND_API_KEY", ""),
+        MAIL_FROM=os.environ.get("MAIL_FROM", ""),
+        MAIL_DELIVERY=None,
+        ADMIN_EMAIL=os.environ.get("ADMIN_EMAIL", "").strip().lower(),
+        CONTACT_EMAIL=os.environ.get("CONTACT_EMAIL", "").strip().lower(),
+        SEED_FULL_CATALOG=os.environ.get("SEED_FULL_CATALOG", "true" if production else "false") == "true",
+        AUTO_CREATE_DB=os.environ.get("AUTO_CREATE_DB", "false" if production else "true") == "true",
         MAX_CONTENT_LENGTH=64 * 1024,
     )
+    if production:
+        app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+            "pool_pre_ping": True, "pool_recycle": 1800,
+            "pool_size": 2, "max_overflow": 1,
+        }
     if test_config:
         app.config.update(test_config)
+    if production:
+        if not os.environ.get("SECRET_KEY") or len(app.secret_key) < 32:
+            raise RuntimeError("Set a stable SECRET_KEY of at least 32 characters in production.")
+        if not app.config["SQLALCHEMY_DATABASE_URI"].startswith("postgresql+psycopg://"):
+            raise RuntimeError("Production requires a persistent PostgreSQL DATABASE_URL.")
+        if not app.config["TRUSTED_HOSTS"]:
+            raise RuntimeError("Set PUBLIC_HOST or RENDER_EXTERNAL_HOSTNAME in production.")
+        if app.config["AUTO_CREATE_DB"]:
+            raise RuntimeError("Production must initialize the database outside the web process.")
+        if app.config["REGISTRATION_ENABLED"] and (
+            not app.config["RESEND_API_KEY"] or not app.config["MAIL_FROM"]
+        ):
+            raise RuntimeError("Email delivery must be configured before opening registration.")
+        if app.config["REGISTRATION_ENABLED"] and (
+            not app.config["ADMIN_EMAIL"] or not app.config["CONTACT_EMAIL"]
+        ):
+            raise RuntimeError("Set ADMIN_EMAIL and CONTACT_EMAIL before opening registration.")
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 
     db.init_app(app)
     login_manager.init_app(app)
@@ -45,13 +100,40 @@ def create_app(test_config=None):
 
     @login_manager.user_loader
     def load_user(user_id):
-        return db.session.get(User, int(user_id)) if user_id.isdigit() else None
+        parts = user_id.split(":")
+        if len(parts) != 2 or not all(part.isdigit() for part in parts):
+            return None
+        user = db.session.get(User, int(parts[0]))
+        if user is None:
+            return None
+        version = user.auth_state.session_version if user.auth_state else 0
+        return user if version == int(parts[1]) else None
 
     @app.context_processor
     def csrf_context():
         if "csrf_token" not in session:
             session["csrf_token"] = secrets.token_urlsafe(32)
         return {"csrf_token": session["csrf_token"]}
+
+    @app.after_request
+    def security_headers(response):
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; script-src 'self'; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+            "font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; "
+            "connect-src 'self'; form-action 'self'; base-uri 'self'; "
+            "frame-ancestors 'none'; object-src 'none'"
+        )
+        if production:
+            response.headers["Strict-Transport-Security"] = "max-age=31536000"
+        if current_user.is_authenticated:
+            response.cache_control.no_store = True
+            response.cache_control.private = True
+        return response
 
     from .routes import site
 
@@ -60,9 +142,16 @@ def create_app(test_config=None):
     @app.errorhandler(400)
     @app.errorhandler(403)
     @app.errorhandler(404)
+    @app.errorhandler(429)
     @app.errorhandler(500)
+    @app.errorhandler(503)
     def friendly_error(error):
         return render_template("error.html", code=error.code), error.code
+
+    @app.get("/healthz")
+    def healthz():
+        db.session.execute(text("SELECT 1"))
+        return "ok", 200, {"Cache-Control": "no-store"}
 
     @app.cli.command("import-tennis")
     @click.option("--from-year", default=2023, type=int, show_default=True)
@@ -76,10 +165,26 @@ def create_app(test_config=None):
         count = import_archive(from_year, to_year)
         click.echo(f"Imported {count} new matches.")
 
-    with app.app_context():
-        db.create_all()
-        from .importer import seed_samples
+    @app.cli.command("init-db")
+    def init_db():
+        """Create tables and seed the catalog using a database owner connection."""
+        from .importer import seed_catalog, seed_samples
 
-        seed_samples()
+        db.create_all()
+        if app.config["SEED_FULL_CATALOG"]:
+            seed_catalog()
+        else:
+            seed_samples()
+        click.echo("Database initialized.")
+
+    if app.config["AUTO_CREATE_DB"]:
+        with app.app_context():
+            db.create_all()
+            from .importer import seed_catalog, seed_samples
+
+            if app.config["SEED_FULL_CATALOG"]:
+                seed_catalog()
+            else:
+                seed_samples()
 
     return app

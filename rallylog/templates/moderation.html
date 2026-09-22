@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% block title %}Moderation{% endblock %}
+{% block content %}
+<div class="container narrow-page moderation-page">
+  <p class="eyebrow">COMMUNITY SAFETY</p><h1>Reports<span>.</span></h1>
+  <p class="muted">Review reported public posts. Removing a review also removes its comments.</p>
+  {% for report in reports %}
+    {% set item = report.review or report.comment %}
+    {% set review = report.review or report.comment.review %}
+    <article class="account-tools moderation-item">
+      <p class="eyebrow">{{ report.reason|upper }} · {{ report.created_at.strftime('%d %b %Y') }}</p>
+      <h2>{{ 'Review' if report.review else 'Comment' }} by {{ item.user.display_name }}</h2>
+      <p>{{ item.body }}</p>
+      <a class="text-link" href="{{ url_for('site.match_detail', match_id=review.match_id) }}#review-{{ review.id }}">Open match ↗</a>
+      <div class="moderation-actions">
+        <form method="post" action="{{ url_for('site.moderate_report', report_id=report.id, action='dismiss') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="button button-outline" type="submit">Dismiss</button></form>
+        <form method="post" action="{{ url_for('site.moderate_report', report_id=report.id, action='remove') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="button danger-button" type="submit">Remove content</button></form>
+      </div>
+    </article>
+  {% else %}
+    <div class="empty-state"><h3>No open reports.</h3><p>The queue is clear.</p></div>
+  {% endfor %}
+</div>
+{% endblock %}
