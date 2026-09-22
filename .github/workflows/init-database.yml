@@ -22,3 +22,7 @@ jobs:
           AUTO_CREATE_DB: "false"
           SEED_FULL_CATALOG: "true"
         run: flask --app wsgi init-db
+      - name: Restrict and verify application database role
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_OWNER_URL }}
+        run: python scripts/apply_database_security.py
