@@ -25,4 +25,5 @@ jobs:
       - name: Restrict and verify application database role
         env:
           DATABASE_URL: ${{ secrets.DATABASE_OWNER_URL }}
+          DATABASE_APP_PASSWORD: ${{ secrets.DATABASE_APP_PASSWORD }}
         run: python scripts/apply_database_security.py

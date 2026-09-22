@@ -6,11 +6,12 @@ import psycopg
 from psycopg import sql
 
 
-ROLE = "rallylog_app"
+ROLE = "rallylog_web"
 
 
 def main():
     database_url = os.environ.get("DATABASE_URL", "")
+    app_password = os.environ.get("DATABASE_APP_PASSWORD", "")
     if not database_url.startswith(("postgresql://", "postgres://")):
         raise RuntimeError("DATABASE_URL must be a PostgreSQL owner connection.")
 
@@ -20,9 +21,12 @@ def main():
             database = cursor.fetchone()[0]
             cursor.execute("SELECT 1 FROM pg_roles WHERE rolname = %s", (ROLE,))
             if cursor.fetchone() is None:
-                raise RuntimeError(f"Create the {ROLE} role in Neon before hardening it.")
-
-            cursor.execute(sql.SQL("REVOKE neon_superuser FROM {}").format(sql.Identifier(ROLE)))
+                if len(app_password) < 32:
+                    raise RuntimeError("DATABASE_APP_PASSWORD must contain at least 32 characters.")
+                cursor.execute(
+                    sql.SQL("CREATE ROLE {} LOGIN PASSWORD %s").format(sql.Identifier(ROLE)),
+                    (app_password,),
+                )
             cursor.execute(sql.SQL(
                 "ALTER ROLE {} NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION"
             ).format(sql.Identifier(ROLE)))
