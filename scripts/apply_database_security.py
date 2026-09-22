@@ -28,9 +28,6 @@ def main():
                         sql.Identifier(ROLE), sql.Literal(app_password)
                     )
                 )
-            cursor.execute(sql.SQL(
-                "ALTER ROLE {} NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION"
-            ).format(sql.Identifier(ROLE)))
             cursor.execute(sql.SQL("REVOKE ALL PRIVILEGES ON DATABASE {} FROM {}").format(
                 sql.Identifier(database), sql.Identifier(ROLE)
             ))
