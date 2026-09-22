@@ -36,6 +36,7 @@ Think **old grass courts, scoreboards and editorial sports print**, expressed in
 - **Stats:** raw counts and percentages are labeled. A dash means the source did not include a value. Bars support comparison but numerical values are always shown too.
 - **Review:** author, viewing date, rating and text. Spoilers are collapsed by default. Comments appear directly below the review.
 - **Diary entry:** the watched-on date is distinct from tournament week. Private entries appear only to the owner.
+- **Watchlist:** an owner-only shelf for matches to watch or revisit; logging one removes it from the shelf.
 - **Player page:** imported win/loss record, surfaces, seasons, opponents, titles and prize money each state the scope or source of their number.
 - **Empty state:** tells the visitor what is missing and where to go next. No fake activity or ratings are seeded.
 

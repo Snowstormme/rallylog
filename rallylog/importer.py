@@ -74,7 +74,7 @@ def import_rows(tour, rows, bios=None):
         if (
             not winner_source_id or not loser_source_id or not week_start
             or not row.get("match_num") or match_id in existing
-            or row.get("score", "").upper() in ("W/O", "WALKOVER", "DEF")
+            or row.get("score", "").strip().upper() in ("W/O", "WALKOVER", "DEF")
         ):
             continue
 

@@ -44,7 +44,8 @@ def player_statistics(player):
         if opponent.id not in opponents:
             opponents[opponent.id] = {"player": opponent, "wins": 0, "losses": 0}
         opponents[opponent.id][result] += 1
-        if won and match.round == "F":
+        # Team ties and legends events have a final round but are not singles titles.
+        if won and match.round == "F" and match.level in {"G", "M", "PM", "P", "A", "I", "F"}:
             titles.append(match)
 
         prefix = "w" if won else "l"

@@ -3,13 +3,13 @@ import re
 from datetime import date, datetime, timedelta, timezone
 from urllib.parse import urlsplit
 
-from flask import Blueprint, abort, flash, redirect, render_template, request, session, url_for
+from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request, session, url_for
 from flask_login import current_user, login_required, login_user, logout_user
-from sqlalchemy import func, or_, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import aliased, joinedload
 
 from . import db
-from .models import Comment, FollowedPlayer, Match, Player, Review, User
+from .models import Comment, FollowedPlayer, Match, Player, Review, User, WatchlistItem
 from .prize_money import update_prize_money
 from .stats import community_statistics, diary_statistics, percent, player_statistics
 
@@ -28,7 +28,11 @@ def check_csrf():
 def safe_next(default="site.home"):
     target = request.args.get("next", "")
     parsed = urlsplit(target)
-    return target if target.startswith("/") and not target.startswith("//") and not parsed.netloc else url_for(default)
+    return (
+        target if target.startswith("/") and not target.startswith("//")
+        and "\\" not in target and not parsed.scheme and not parsed.netloc
+        else url_for(default)
+    )
 
 
 @site.get("/")
@@ -80,7 +84,7 @@ def matches():
         statement = statement.where(Match.tour == tour)
     if surface in ("Hard", "Clay", "Grass", "Carpet"):
         statement = statement.where(Match.surface == surface)
-    if level in ("G", "M", "A", "F"):
+    if level in ("G", "M", "PM", "P", "A", "I", "F", "O", "D"):
         statement = statement.where(Match.level == level)
     if year.isdigit() and 1968 <= int(year) <= 2026:
         statement = statement.where(func.extract("year", Match.week_start) == int(year))
@@ -105,10 +109,16 @@ def match_detail(match_id):
         .order_by(Review.created_at.desc())
     ).unique().all()
     own_review = None
+    on_watchlist = False
     if current_user.is_authenticated:
         own_review = db.session.scalar(
             select(Review).where(Review.match_id == match_id, Review.user_id == current_user.id)
         )
+        on_watchlist = db.session.scalar(
+            select(WatchlistItem.id).where(
+                WatchlistItem.match_id == match_id, WatchlistItem.user_id == current_user.id
+            )
+        ) is not None
     serve_stats = []
     if match.w_ace is not None and match.l_ace is not None:
         serve_stats.append(("Aces", match.w_ace, match.l_ace, None))
@@ -126,8 +136,28 @@ def match_detail(match_id):
         ))
     return render_template(
         "match.html", match=match, reviews=reviews, own_review=own_review,
-        community=community_statistics(match), serve_stats=serve_stats, today=date.today(),
+        community=community_statistics(match), serve_stats=serve_stats,
+        today=date.today(), on_watchlist=on_watchlist,
     )
+
+
+@site.post("/matches/<path:match_id>/watchlist")
+@login_required
+def toggle_watchlist(match_id):
+    db.get_or_404(Match, match_id)
+    item = db.session.scalar(
+        select(WatchlistItem).where(
+            WatchlistItem.user_id == current_user.id, WatchlistItem.match_id == match_id
+        )
+    )
+    if item:
+        db.session.delete(item)
+        flash("Removed from your watchlist.", "success")
+    else:
+        db.session.add(WatchlistItem(user_id=current_user.id, match_id=match_id))
+        flash("Saved to your watchlist.", "success")
+    db.session.commit()
+    return redirect(url_for("site.match_detail", match_id=match_id))
 
 
 @site.get("/players")
@@ -256,14 +286,20 @@ def profile(username):
         .order_by(Review.watched_on.desc(), Review.id.desc())
     ).all()
     followed = []
+    watchlist = []
     if own:
         followed = db.session.scalars(
             select(FollowedPlayer).where(FollowedPlayer.user_id == user.id)
             .options(joinedload(FollowedPlayer.player)).limit(12)
         ).all()
+        watchlist = db.session.scalars(
+            select(WatchlistItem).where(WatchlistItem.user_id == user.id)
+            .options(joinedload(WatchlistItem.match))
+            .order_by(WatchlistItem.added_at.desc()).limit(8)
+        ).all()
     return render_template(
         "profile.html", user=user, reviews=reviews,
-        stats=diary_statistics(reviews), own=own, followed=followed,
+        stats=diary_statistics(reviews), own=own, followed=followed, watchlist=watchlist,
     )
 
 
@@ -288,6 +324,84 @@ def settings():
             flash("Settings saved.", "success")
             return redirect(url_for("site.settings"))
     return render_template("settings.html")
+
+
+@site.get("/settings/export")
+@login_required
+def export_diary():
+    reviews = db.session.scalars(
+        select(Review).where(Review.user_id == current_user.id)
+        .options(joinedload(Review.match)).order_by(Review.watched_on)
+    ).all()
+    follows = db.session.scalars(
+        select(FollowedPlayer).where(FollowedPlayer.user_id == current_user.id)
+        .options(joinedload(FollowedPlayer.player))
+    ).all()
+    watchlist = db.session.scalars(
+        select(WatchlistItem).where(WatchlistItem.user_id == current_user.id)
+    ).all()
+    comments = db.session.scalars(
+        select(Comment).where(Comment.user_id == current_user.id)
+        .options(joinedload(Comment.review))
+        .order_by(Comment.created_at)
+    ).all()
+    payload = {
+        "username": current_user.username,
+        "email": current_user.email,
+        "display_name": current_user.display_name,
+        "bio": current_user.bio,
+        "joined_at": current_user.created_at.isoformat(),
+        "diary": [
+            {
+                "match_id": review.match_id,
+                "match": f"{review.match.winner.name} vs {review.match.loser.name}",
+                "tournament": review.match.tournament,
+                "watched_on": review.watched_on.isoformat(),
+                "rating_out_of_five": review.rating_half / 2 if review.rating_half else None,
+                "review": review.body,
+                "favorite": review.is_favorite,
+                "public": review.is_public,
+                "spoilers": review.has_spoilers,
+            }
+            for review in reviews
+        ],
+        "followed_players": [item.player.name for item in follows],
+        "watchlist_match_ids": [item.match_id for item in watchlist],
+        "comments": [
+            {
+                "match_id": comment.review.match_id,
+                "review_id": comment.review_id,
+                "body": comment.body,
+                "created_at": comment.created_at.isoformat(),
+            }
+            for comment in comments
+        ],
+    }
+    response = jsonify(payload)
+    response.headers["Content-Disposition"] = f'attachment; filename="rallylog-{current_user.username}.json"'
+    response.cache_control.no_store = True
+    return response
+
+
+@site.post("/settings/delete-account")
+@login_required
+def delete_account():
+    if (
+        request.form.get("username", "").strip().lower() != current_user.username
+        or not current_user.check_password(request.form.get("password", ""))
+    ):
+        flash("Username or password was incorrect. Your account was not deleted.", "error")
+        return redirect(url_for("site.settings"))
+    user = db.session.get(User, current_user.id)
+    db.session.execute(delete(Comment).where(Comment.user_id == user.id))
+    db.session.execute(delete(FollowedPlayer).where(FollowedPlayer.user_id == user.id))
+    db.session.execute(delete(WatchlistItem).where(WatchlistItem.user_id == user.id))
+    db.session.delete(user)
+    db.session.commit()
+    logout_user()
+    session.clear()
+    flash("Your account and diary have been deleted.", "success")
+    return redirect(url_for("site.home"))
 
 
 @site.post("/matches/<path:match_id>/log")
@@ -322,6 +436,13 @@ def log_match(match_id):
     review.is_favorite = request.form.get("favorite") == "on"
     review.is_public = request.form.get("public") == "on"
     review.has_spoilers = request.form.get("spoilers") == "on"
+    watchlist_item = db.session.scalar(
+        select(WatchlistItem).where(
+            WatchlistItem.user_id == current_user.id, WatchlistItem.match_id == match_id
+        )
+    )
+    if watchlist_item:
+        db.session.delete(watchlist_item)
     db.session.commit()
     flash("Your match diary entry was saved.", "success")
     return redirect(url_for("site.match_detail", match_id=match_id))
@@ -369,7 +490,7 @@ def add_comment(review_id):
 @login_required
 def delete_comment(comment_id):
     comment = db.get_or_404(Comment, comment_id)
-    if comment.user_id != current_user.id:
+    if comment.user_id != current_user.id and comment.review.user_id != current_user.id:
         abort(403)
     match_id = comment.review.match_id
     review_id = comment.review_id

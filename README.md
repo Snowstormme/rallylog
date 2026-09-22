@@ -27,9 +27,10 @@ That command downloads ATP and WTA CSV files from the [Sackmann archive](https:/
 - **Matches:** search by player or tournament; filter by tour, surface, level and year.
 - **Match page:** score, recorded serve statistics, community rating, reviews and comments.
 - **Diary:** one editable entry per user and match with viewing date, optional half-star rating, review, favorite, spoiler flag and public/private choice.
+- **Watchlist:** save matches to watch later; logging a match removes it from the watchlist.
 - **Players:** biography, imported wins and losses, surface and season splits, titles, serve metrics, frequent opponents and followed players.
 - **Profiles:** personal diary, watched surfaces, tour split, ratings and favorites.
-- **Settings:** display name, bio and password change.
+- **Settings:** display name, bio, password change, diary export and account deletion.
 
 ## Data honesty
 

@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 
 from rallylog import create_app, db
-from rallylog.models import Match, Review
+from rallylog.models import Comment, FollowedPlayer, Match, Player, Review, User, WatchlistItem
 from sqlalchemy import select
 
 
@@ -91,6 +91,111 @@ class RallylogFlows(unittest.TestCase):
             self.client.post(f"/reviews/{review_id}/delete", data={"csrf_token": self.token()}).status_code,
             403,
         )
+
+    def test_login_redirect_stays_on_site(self):
+        self.register("alice")
+        self.client.post("/logout", data={"csrf_token": self.token()})
+        self.client.get("/login?next=/%5Cexample.com")
+        response = self.client.post("/login?next=/%5Cexample.com", data={
+            "csrf_token": self.token(), "identity": "alice", "password": "long-test-password",
+        })
+        self.assertEqual(response.headers["Location"], "/me")
+
+    def test_profile_settings_follow_and_html_escaping(self):
+        self.register("alice")
+        with self.app.app_context():
+            player_id = db.session.scalar(select(Player.id).limit(1))
+        self.client.post(f"/players/{player_id}/follow", data={"csrf_token": self.token()})
+        self.assertIn(b"Following", self.client.get(f"/players/{player_id}").data)
+        self.client.post(f"/matches/{self.match_id}/watchlist", data={"csrf_token": self.token()})
+        self.assertIn(b"Your watchlist", self.client.get("/u/alice").data)
+        response = self.client.post("/settings", data={
+            "csrf_token": self.token(), "display_name": "Court Reader",
+            "bio": "Grass-court fan",
+        }, follow_redirects=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Court Reader", self.client.get("/u/alice").data)
+        response = self.client.post(f"/matches/{self.match_id}/log", data={
+            "csrf_token": self.token(), "watched_on": "2025-01-30",
+            "body": "<script>alert(1)</script>", "public": "on", "spoilers": "on",
+        }, follow_redirects=True)
+        self.assertIn(b"&lt;script&gt;", response.data)
+        self.assertNotIn(b"<script>alert(1)</script>", response.data)
+        self.assertIn(b"Review contains spoilers", self.client.get("/u/alice").data)
+        with self.app.app_context():
+            self.assertIsNone(db.session.scalar(select(WatchlistItem.id)))
+
+    def test_account_export_and_deletion(self):
+        self.register("alice")
+        with self.app.app_context():
+            player_id = db.session.scalar(select(Player.id).limit(1))
+            another_match_id = db.session.scalar(
+                select(Match.id).where(Match.id != self.match_id).limit(1)
+            )
+        self.client.post(f"/players/{player_id}/follow", data={"csrf_token": self.token()})
+        self.client.post(f"/matches/{another_match_id}/watchlist", data={"csrf_token": self.token()})
+        self.client.post(f"/matches/{self.match_id}/log", data={
+            "csrf_token": self.token(), "watched_on": "2025-01-30",
+            "rating": "9", "body": "Alice's private data", "public": "on",
+        })
+        with self.app.app_context():
+            alice_review_id = db.session.scalar(select(Review.id))
+        self.client.post("/logout", data={"csrf_token": self.token()})
+
+        self.register("bob")
+        self.client.post(f"/reviews/{alice_review_id}/comments", data={
+            "csrf_token": self.token(), "body": "Bob's comment",
+        })
+        self.client.post(f"/matches/{another_match_id}/log", data={
+            "csrf_token": self.token(), "watched_on": "2025-01-30", "public": "on",
+        })
+        with self.app.app_context():
+            bob_review_id = db.session.scalar(
+                select(Review.id).where(Review.match_id == another_match_id)
+            )
+            bob_comment_id = db.session.scalar(
+                select(Comment.id).where(Comment.review_id == alice_review_id)
+            )
+        self.client.post("/logout", data={"csrf_token": self.token()})
+
+        self.client.get("/login")
+        self.client.post("/login", data={
+            "csrf_token": self.token(), "identity": "alice", "password": "long-test-password",
+        })
+        self.assertIn(
+            f'action="/comments/{bob_comment_id}/delete"'.encode(),
+            self.client.get(f"/matches/{self.match_id}").data,
+        )
+        self.client.post(f"/reviews/{bob_review_id}/comments", data={
+            "csrf_token": self.token(), "body": "Alice's comment",
+        })
+        export = self.client.get("/settings/export")
+        self.assertEqual(export.status_code, 200)
+        self.assertEqual(export.headers["Cache-Control"], "no-store")
+        data = export.get_json()
+        self.assertEqual(data["email"], "alice@example.com")
+        self.assertEqual(data["diary"][0]["rating_out_of_five"], 4.5)
+        self.assertEqual(data["comments"][0]["body"], "Alice's comment")
+        self.assertEqual(data["watchlist_match_ids"], [another_match_id])
+        self.assertEqual(len(data["followed_players"]), 1)
+        self.assertNotIn("password_hash", export.get_data(as_text=True))
+
+        self.client.post("/settings/delete-account", data={
+            "csrf_token": self.token(), "username": "alice", "password": "wrong-password",
+        })
+        with self.app.app_context():
+            self.assertIsNotNone(db.session.scalar(select(User.id).where(User.username == "alice")))
+        self.assertEqual(self.client.post("/settings/delete-account", data={
+            "csrf_token": self.token(), "username": "alice", "password": "long-test-password",
+        }).status_code, 302)
+        with self.app.app_context():
+            self.assertIsNone(db.session.scalar(select(User.id).where(User.username == "alice")))
+            self.assertIsNone(db.session.scalar(select(Review.id).where(Review.id == alice_review_id)))
+            self.assertIsNotNone(db.session.scalar(select(Review.id).where(Review.id == bob_review_id)))
+            self.assertIsNone(db.session.scalar(select(Comment.id)))
+            self.assertIsNone(db.session.scalar(select(FollowedPlayer.id)))
+            self.assertIsNone(db.session.scalar(select(WatchlistItem.id)))
+        self.assertEqual(self.client.get("/settings/export").status_code, 302)
 
 
 if __name__ == "__main__":

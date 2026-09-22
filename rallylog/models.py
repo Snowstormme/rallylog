@@ -48,7 +48,7 @@ class Match(db.Model):
     id = db.Column(db.String(100), primary_key=True)
     tour = db.Column(db.String(3), nullable=False, index=True)
     tournament = db.Column(db.String(120), nullable=False, index=True)
-    level = db.Column(db.String(2), nullable=False)
+    level = db.Column(db.String(12), nullable=False)
     surface = db.Column(db.String(12), nullable=False, index=True)
     week_start = db.Column(db.Date, nullable=False, index=True)
     round = db.Column(db.String(4), nullable=False)
@@ -115,3 +115,12 @@ class FollowedPlayer(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
     player_id = db.Column(db.String(24), db.ForeignKey("player.id"), nullable=False, index=True)
     player = db.relationship("Player")
+
+
+class WatchlistItem(db.Model):
+    __table_args__ = (UniqueConstraint("user_id", "match_id", name="uq_user_match_watchlist"),)
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    match_id = db.Column(db.String(100), db.ForeignKey("match.id"), nullable=False, index=True)
+    added_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    match = db.relationship("Match")
