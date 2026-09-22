@@ -24,8 +24,9 @@ def main():
                 if len(app_password) < 32:
                     raise RuntimeError("DATABASE_APP_PASSWORD must contain at least 32 characters.")
                 cursor.execute(
-                    sql.SQL("CREATE ROLE {} LOGIN PASSWORD %s").format(sql.Identifier(ROLE)),
-                    (app_password,),
+                    sql.SQL("CREATE ROLE {} LOGIN PASSWORD {}").format(
+                        sql.Identifier(ROLE), sql.Literal(app_password)
+                    )
                 )
             cursor.execute(sql.SQL(
                 "ALTER ROLE {} NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION"
