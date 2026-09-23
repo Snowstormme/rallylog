@@ -54,6 +54,11 @@ def create_app(test_config=None):
         or os.environ.get("VERCEL_URL")
         or os.environ.get("RENDER_EXTERNAL_HOSTNAME")
     )
+    trusted_hosts = list(dict.fromkeys(filter(None, (
+        public_host,
+        os.environ.get("VERCEL_PROJECT_PRODUCTION_URL"),
+        os.environ.get("VERCEL_URL"),
+    ))))
 
     app.config.update(
         SECRET_KEY=os.environ.get("SECRET_KEY") or secrets.token_hex(32),
@@ -63,7 +68,7 @@ def create_app(test_config=None):
         SESSION_COOKIE_SAMESITE="Lax",
         SESSION_COOKIE_SECURE=production,
         PERMANENT_SESSION_LIFETIME=timedelta(days=7),
-        TRUSTED_HOSTS=[public_host] if production and public_host else None,
+        TRUSTED_HOSTS=trusted_hosts if production and trusted_hosts else None,
         PUBLIC_BASE_URL=f"https://{public_host}" if production and public_host else "http://127.0.0.1:5000",
         REQUIRE_EMAIL_VERIFICATION=production,
         REGISTRATION_ENABLED=os.environ.get("REGISTRATION_ENABLED", "true") == "true",
