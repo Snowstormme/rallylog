@@ -147,6 +147,19 @@ class ProductionConfig(unittest.TestCase):
                 db.session.remove()
                 db.engine.dispose()
 
+    def test_vercel_hostname_configures_production_trust(self):
+        environment = {
+            "APP_ENV": "production",
+            "SECRET_KEY": "v" * 64,
+            "DATABASE_URL": "postgresql://user:password@example.com/app?sslmode=require",
+            "VERCEL_URL": "rallylog-preview.vercel.app",
+            "REGISTRATION_ENABLED": "false",
+        }
+        with patch.dict(os.environ, environment, clear=True):
+            app = create_app({"TESTING": True})
+        self.assertEqual(app.config["TRUSTED_HOSTS"], ["rallylog-preview.vercel.app"])
+        self.assertEqual(app.config["PUBLIC_BASE_URL"], "https://rallylog-preview.vercel.app")
+
 
 if __name__ == "__main__":
     unittest.main()

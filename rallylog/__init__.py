@@ -27,7 +27,8 @@ def enforce_sqlite_foreign_keys(connection, _record):
 
 
 def create_app(test_config=None):
-    app = Flask(__name__)
+    static_folder = Path(__file__).resolve().parent.parent / "public" / "static"
+    app = Flask(__name__, static_folder=str(static_folder))
     instance_path = Path(app.instance_path)
     instance_path.mkdir(parents=True, exist_ok=True)
 
@@ -44,7 +45,12 @@ def create_app(test_config=None):
             raise RuntimeError("Production PostgreSQL must require TLS.")
         database_url = str(parsed.update_query_dict({"sslmode": mode}))
 
-    public_host = os.environ.get("PUBLIC_HOST") or os.environ.get("RENDER_EXTERNAL_HOSTNAME")
+    public_host = (
+        os.environ.get("PUBLIC_HOST")
+        or os.environ.get("VERCEL_PROJECT_PRODUCTION_URL")
+        or os.environ.get("VERCEL_URL")
+        or os.environ.get("RENDER_EXTERNAL_HOSTNAME")
+    )
 
     app.config.update(
         SECRET_KEY=os.environ.get("SECRET_KEY") or secrets.token_hex(32),
