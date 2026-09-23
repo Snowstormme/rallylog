@@ -152,6 +152,7 @@ class ProductionConfig(unittest.TestCase):
             "APP_ENV": "production",
             "SECRET_KEY": "v" * 64,
             "DATABASE_URL": "postgresql://user:password@example.com/app?sslmode=require",
+            "VERCEL": "1",
             "VERCEL_URL": "tennisd-preview.vercel.app",
             "REGISTRATION_ENABLED": "false",
         }
@@ -159,6 +160,7 @@ class ProductionConfig(unittest.TestCase):
             app = create_app({"TESTING": True})
         self.assertEqual(app.config["TRUSTED_HOSTS"], ["tennisd-preview.vercel.app"])
         self.assertEqual(app.config["PUBLIC_BASE_URL"], "https://tennisd-preview.vercel.app")
+        self.assertEqual(app.instance_path, "/tmp/tennisd-instance")
 
 
 if __name__ == "__main__":

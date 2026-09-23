@@ -28,7 +28,10 @@ def enforce_sqlite_foreign_keys(connection, _record):
 
 def create_app(test_config=None):
     static_folder = Path(__file__).resolve().parent.parent / "public" / "static"
-    app = Flask(__name__, static_folder=str(static_folder))
+    flask_options = {"static_folder": str(static_folder)}
+    if os.environ.get("VERCEL"):
+        flask_options["instance_path"] = "/tmp/tennisd-instance"
+    app = Flask(__name__, **flask_options)
     instance_path = Path(app.instance_path)
     instance_path.mkdir(parents=True, exist_ok=True)
 
