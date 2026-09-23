@@ -2,12 +2,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from rallylog import create_app, db
-from rallylog.models import Comment, FollowedPlayer, Match, Player, Report, Review, User, WatchlistItem
+from tennisd import create_app, db
+from tennisd.models import Comment, FollowedPlayer, Match, Player, Report, Review, User, WatchlistItem
 from sqlalchemy import select
 
 
-class RallylogFlows(unittest.TestCase):
+class TennisdFlows(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         database = Path(self.temporary.name) / "test.db"

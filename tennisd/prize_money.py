@@ -24,7 +24,7 @@ def update_prize_money(player):
                 "props": "claims",
                 "format": "json",
             },
-            headers={"User-Agent": "Rallylog/0.1 (non-commercial tennis diary)"},
+            headers={"User-Agent": "Tennisd/0.1 (non-commercial tennis diary)"},
             timeout=4,
         )
         response.raise_for_status()

@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: rallylog
+    name: tennisd
     runtime: python
     plan: free
     region: frankfurt

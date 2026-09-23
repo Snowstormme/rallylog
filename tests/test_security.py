@@ -5,8 +5,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from rallylog import create_app, db
-from rallylog.models import Match, User
+from tennisd import create_app, db
+from tennisd.models import Match, User
 from sqlalchemy import func, select
 from werkzeug.security import generate_password_hash
 
@@ -20,7 +20,7 @@ class AccountSecurityFlows(unittest.TestCase):
             "SECRET_KEY": "test-only-secret",
             "SQLALCHEMY_DATABASE_URI": f"sqlite:///{Path(self.temporary.name) / 'test.db'}",
             "REQUIRE_EMAIL_VERIFICATION": True,
-            "PUBLIC_BASE_URL": "https://rallylog.example",
+            "PUBLIC_BASE_URL": "https://tennisd.example",
             "MAIL_DELIVERY": lambda email, subject, body: self.sent.append((email, subject, body)),
         })
         self.client = self.app.test_client()
@@ -43,8 +43,8 @@ class AccountSecurityFlows(unittest.TestCase):
         })
 
     def verify(self):
-        link = re.search(r"https://rallylog\.example/verify-email/\S+", self.sent[-1][2]).group()
-        path = link.removeprefix("https://rallylog.example")
+        link = re.search(r"https://tennisd\.example/verify-email/\S+", self.sent[-1][2]).group()
+        path = link.removeprefix("https://tennisd.example")
         self.assertEqual(self.client.get(path).status_code, 200)
         self.assertEqual(self.client.post(path, data={"csrf_token": self.token()}).status_code, 302)
         return path
@@ -76,8 +76,8 @@ class AccountSecurityFlows(unittest.TestCase):
         another.post("/forgot-password", data={
             "csrf_token": self.token(another), "email": "alice@example.com",
         })
-        link = re.search(r"https://rallylog\.example/reset-password/\S+", self.sent[-1][2]).group()
-        path = link.removeprefix("https://rallylog.example")
+        link = re.search(r"https://tennisd\.example/reset-password/\S+", self.sent[-1][2]).group()
+        path = link.removeprefix("https://tennisd.example")
         self.assertEqual(another.get(path).status_code, 200)
         self.assertEqual(another.post(path, data={"password": "another-long-password"}).status_code, 400)
         self.assertEqual(another.post(path, data={
@@ -152,13 +152,13 @@ class ProductionConfig(unittest.TestCase):
             "APP_ENV": "production",
             "SECRET_KEY": "v" * 64,
             "DATABASE_URL": "postgresql://user:password@example.com/app?sslmode=require",
-            "VERCEL_URL": "rallylog-preview.vercel.app",
+            "VERCEL_URL": "tennisd-preview.vercel.app",
             "REGISTRATION_ENABLED": "false",
         }
         with patch.dict(os.environ, environment, clear=True):
             app = create_app({"TESTING": True})
-        self.assertEqual(app.config["TRUSTED_HOSTS"], ["rallylog-preview.vercel.app"])
-        self.assertEqual(app.config["PUBLIC_BASE_URL"], "https://rallylog-preview.vercel.app")
+        self.assertEqual(app.config["TRUSTED_HOSTS"], ["tennisd-preview.vercel.app"])
+        self.assertEqual(app.config["PUBLIC_BASE_URL"], "https://tennisd-preview.vercel.app")
 
 
 if __name__ == "__main__":

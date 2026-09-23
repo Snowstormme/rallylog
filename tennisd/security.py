@@ -65,11 +65,11 @@ def send_account_email(user, purpose):
     raw = issue_token(user, purpose, 86400 if purpose == "verify" else 1800)
     base = current_app.config["PUBLIC_BASE_URL"].rstrip("/")
     if purpose == "verify":
-        subject = "Verify your Rallylog email"
-        body = f"Verify your Rallylog email address:\n\n{base}/verify-email/{raw}\n\nThis link expires in 24 hours."
+        subject = "Verify your Tennisd email"
+        body = f"Verify your Tennisd email address:\n\n{base}/verify-email/{raw}\n\nThis link expires in 24 hours."
     else:
-        subject = "Reset your Rallylog password"
-        body = f"Reset your Rallylog password:\n\n{base}/reset-password/{raw}\n\nThis link expires in 30 minutes. If you did not request it, ignore this email."
+        subject = "Reset your Tennisd password"
+        body = f"Reset your Tennisd password:\n\n{base}/reset-password/{raw}\n\nThis link expires in 30 minutes. If you did not request it, ignore this email."
 
     delivery = current_app.config.get("MAIL_DELIVERY")
     if delivery:

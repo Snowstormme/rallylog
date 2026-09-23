@@ -1,3 +1,3 @@
-from rallylog import create_app
+from tennisd import create_app
 
 app = create_app()

@@ -54,7 +54,7 @@ def create_app(test_config=None):
 
     app.config.update(
         SECRET_KEY=os.environ.get("SECRET_KEY") or secrets.token_hex(32),
-        SQLALCHEMY_DATABASE_URI=database_url or f"sqlite:///{instance_path / 'rallylog.db'}",
+        SQLALCHEMY_DATABASE_URI=database_url or f"sqlite:///{instance_path / 'tennisd.db'}",
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",

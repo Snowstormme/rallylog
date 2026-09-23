@@ -7,8 +7,8 @@ from pathlib import Path
 
 from sqlalchemy import select
 
-from rallylog import create_app, db
-from rallylog.models import Match, Player
+from tennisd import create_app, db
+from tennisd.models import Match, Player
 
 
 OUTPUT = Path(__file__).resolve().parent.parent / "data" / "catalog_2023_2026.json.gz"

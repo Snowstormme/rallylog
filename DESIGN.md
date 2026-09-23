@@ -1,8 +1,8 @@
-# Rallylog design guide
+# Tennisd design guide
 
 ## Product idea
 
-Rallylog is a **courtside diary**: a place to remember professional tennis matches you watched. The central object is a *match*, not a player news article or live score. A member can log one viewing of a match, rate it in half-star steps, write a review, mark it as a favorite, choose public/private visibility and discuss public reviews. Player pages provide context for the match archive.
+Tennisd is a **courtside diary**: a place to remember professional tennis matches you watched. The central object is a *match*, not a player news article or live score. A member can log one viewing of a match, rate it in half-star steps, write a review, mark it as a favorite, choose public/private visibility and discuss public reviews. Player pages provide context for the match archive.
 
 ## Navigation and information hierarchy
 

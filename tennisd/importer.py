@@ -34,7 +34,7 @@ def date(value):
 
 
 def csv_from_url(url):
-    response = requests.get(url, timeout=30, headers={"User-Agent": "Rallylog/0.1 (tennis diary)"})
+    response = requests.get(url, timeout=30, headers={"User-Agent": "Tennisd/0.1 (tennis diary)"})
     response.raise_for_status()
     return list(csv.DictReader(StringIO(response.content.decode("utf-8-sig"))))
 

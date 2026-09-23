@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#10231f">
-  <meta name="description" content="Rallylog — your tennis match diary, player records and community reviews.">
-  <title>{% block title %}Rallylog{% endblock %} · The tennis match diary</title>
+  <meta name="description" content="Tennisd — your tennis match diary, player records and community reviews.">
+  <title>{% block title %}Tennisd{% endblock %} · The tennis match diary</title>
   <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -16,7 +16,7 @@
   <a class="skip-link" href="#main">Skip to content</a>
   <header class="site-header">
     <div class="header-inner container">
-      <a class="brand" href="{{ url_for('site.home') }}" aria-label="Rallylog home"><span class="brand-mark" aria-hidden="true"></span><span>RALLY<span class="brand-accent">LOG</span></span></a>
+      <a class="brand" href="{{ url_for('site.home') }}" aria-label="Tennisd home"><span class="brand-mark" aria-hidden="true"></span><span>TENNIS<span class="brand-accent">D</span></span></a>
       <nav class="main-nav" aria-label="Main navigation">
         <a href="{{ url_for('site.home') }}"{% if request.endpoint == 'site.home' %} aria-current="page"{% endif %}>Discover</a>
         <a href="{{ url_for('site.matches') }}"{% if request.endpoint in ('site.matches', 'site.match_detail') %} aria-current="page"{% endif %}>Matches</a>
@@ -27,7 +27,7 @@
           {% if config.ADMIN_EMAIL and current_user.email == config.ADMIN_EMAIL %}<a class="header-login" href="{{ url_for('site.moderation') }}">Reports</a>{% endif %}<a class="header-profile" href="{{ url_for('site.my_profile') }}"><span class="mini-avatar">{{ current_user.display_name[0]|upper }}</span><span>My diary</span></a>
         {% else %}
           <a class="header-login" href="{{ url_for('site.login') }}">Log in</a>
-          {% if config.REGISTRATION_ENABLED %}<a class="button button-small" href="{{ url_for('site.register') }}">Join Rallylog</a>{% endif %}
+          {% if config.REGISTRATION_ENABLED %}<a class="button button-small" href="{{ url_for('site.register') }}">Join Tennisd</a>{% endif %}
         {% endif %}
       </div>
     </div>
@@ -38,7 +38,7 @@
   <main id="main">{% block content %}{% endblock %}</main>
   <footer class="site-footer">
     <div class="container footer-inner">
-      <div><a class="footer-brand" href="{{ url_for('site.home') }}">RALLYLOG<span>.</span></a><p>A place for the matches that stayed with you.</p></div>
+      <div><a class="footer-brand" href="{{ url_for('site.home') }}">TENNISD<span>.</span></a><p>A place for the matches that stayed with you.</p></div>
       <div class="footer-links"><a href="{{ url_for('site.about') }}">About & data</a><a href="{{ url_for('site.privacy') }}">Privacy</a><a href="{{ url_for('site.matches') }}">Explore matches</a><a href="{{ url_for('site.players') }}">Explore players</a></div>
       <p class="data-credit">Match data: Jeff Sackmann / Tennis Abstract, <a href="https://github.com/Aneeshers/tennis-sackmann-archive" target="_blank" rel="noopener noreferrer">CC BY-NC-SA 4.0 archive</a>. Non-commercial project. Data coverage is explained on the <a href="{{ url_for('site.about') }}">About page</a>.</p>
     </div>

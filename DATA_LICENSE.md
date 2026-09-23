@@ -4,4 +4,4 @@ The `data/sample_matches.json`, `data/sample_players.json` and `data/catalog_202
 
 The optional `flask --app wsgi import-tennis` command downloads more records from the same archive. Users of those records must retain attribution and follow the dataset license. The site's About page and footer display attribution.
 
-Rallylog application code is separate from the imported tennis data.
+Tennisd application code is separate from the imported tennis data.

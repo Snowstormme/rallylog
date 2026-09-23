@@ -1,5 +1,5 @@
 -- Run as the database owner after creating a plain LOGIN role named rallylog_web.
--- The website role can use Rallylog tables but cannot alter or drop the schema.
+-- The website role can use Tennisd tables but cannot alter or drop the schema.
 
 ALTER ROLE rallylog_web NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;

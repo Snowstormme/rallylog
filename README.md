@@ -1,8 +1,8 @@
-# Rallylog
+# Tennisd
 
 **A tennis match diary.** Browse real ATP and WTA matches, log what you watched, rate matches, write reviews, comment, follow players, and see your tennis taste in a personal profile.
 
-Rallylog is a separate project from Movie Finder. The interface is in English. It uses Flask, Flask-SQLAlchemy and Flask-Login. SQLite works locally; set `DATABASE_URL` to use PostgreSQL when hosting.
+Tennisd is a separate project from Movie Finder. The interface is in English. It uses Flask, Flask-SQLAlchemy and Flask-Login. SQLite works locally; set `DATABASE_URL` to use PostgreSQL when hosting.
 
 ## Run locally
 
@@ -13,7 +13,7 @@ pip install -r requirements.txt
 flask --app wsgi run --debug
 ```
 
-Open <http://127.0.0.1:5000>. The first run creates the local database and imports 16 real Grand Slam finals from 2024–2025 so the site is usable immediately. `instance/rallylog.db` is ignored by Git. To load a larger catalog:
+Open <http://127.0.0.1:5000>. The first run creates the local database and imports 16 real Grand Slam finals from 2024–2025 so the site is usable immediately. `instance/tennisd.db` is ignored by Git. To load a larger catalog:
 
 ```bash
 flask --app wsgi import-tennis --from-year 2023 --to-year 2026
@@ -54,12 +54,12 @@ That command downloads ATP and WTA CSV files from the [Sackmann archive](https:/
 
 ## Public deployment
 
-Rallylog can run as one Flask function on Vercel Hobby with automatic HTTPS and registration initially disabled. Use a separate [Neon PostgreSQL](https://neon.com/) database; serverless filesystems are ephemeral, so production must not use SQLite.
+Tennisd can run as one Flask function on Vercel Hobby with automatic HTTPS and registration initially disabled. Use a separate [Neon PostgreSQL](https://neon.com/) database; serverless filesystems are ephemeral, so production must not use SQLite.
 
 1. Create a Neon project in a nearby region. Do not create the website role in the Neon console because console-created roles inherit `neon_superuser`.
 2. Add the owner TLS connection string as the temporary GitHub secret `DATABASE_OWNER_URL` and a random 32-character-or-longer value as `DATABASE_APP_PASSWORD`, then run **Initialize production database**. The action creates the schema, loads 19,903 ATP/WTA matches, creates `rallylog_web`, grants only runtime data access and verifies that the role has no elevated privileges. Rotate the owner password and remove both temporary GitHub secrets afterward.
 3. Build a pooled TLS URL using `rallylog_web` and the generated application password, then set it as Vercel's `DATABASE_URL`.
-4. Create a Resend account and verify a sending domain. Rallylog uses its HTTPS API. Set `RESEND_API_KEY`, `MAIL_FROM`, `ADMIN_EMAIL` and `CONTACT_EMAIL` in Vercel.
+4. Create a Resend account and verify a sending domain. Tennisd uses its HTTPS API. Set `RESEND_API_KEY`, `MAIL_FROM`, `ADMIN_EMAIL` and `CONTACT_EMAIL` in Vercel.
 5. Import the Git repository into a Vercel Hobby project. Set `APP_ENV=production`, `REGISTRATION_ENABLED=false`, a random 64-character `SECRET_KEY`, and `DATABASE_URL`. Vercel detects `wsgi.py` as the Flask entry point and supplies its hostname to the app.
 6. Verify `/healthz`, the catalog, account email, login, password reset, reports, export and account deletion. Then change `REGISTRATION_ENABLED` to `true` and redeploy.
 
@@ -69,7 +69,7 @@ The checked-in [Render Blueprint](render.yaml) remains an alternative host confi
 
 The **Encrypted database backup** GitHub action creates a PostgreSQL custom-format dump, encrypts it with an age public key before upload and retains the artifact for 30 days. Configure:
 
-- GitHub secret `BACKUP_DATABASE_URL`: a TLS database URL that can read all Rallylog tables.
+- GitHub secret `BACKUP_DATABASE_URL`: a TLS database URL that can read all Tennisd tables.
 - GitHub variable `BACKUP_RECIPIENT`: the public `age1...` key. Keep the private age key offline and outside GitHub.
 - GitHub variable `BACKUPS_ENABLED=true` only after performing a restore drill.
 
@@ -82,15 +82,15 @@ No account data, database files, API keys or connection URLs belong in Git. Copy
 ## Structure
 
 ```text
-rallylog/
-  rallylog/__init__.py     application setup and import command
-  rallylog/models.py       database tables
-  rallylog/importer.py     historical match import
-  rallylog/stats.py        transparent statistics
-  rallylog/prize_money.py  optional Wikidata figure
-  rallylog/routes.py       pages and forms
-  rallylog/security.py     tokens, email and persistent abuse limits
-  rallylog/templates/     HTML pages
+tennisd/
+  tennisd/__init__.py     application setup and import command
+  tennisd/models.py       database tables
+  tennisd/importer.py     historical match import
+  tennisd/stats.py        transparent statistics
+  tennisd/prize_money.py  optional Wikidata figure
+  tennisd/routes.py       pages and forms
+  tennisd/security.py     tokens, email and persistent abuse limits
+  tennisd/templates/     HTML pages
   public/static/          CSS and favicon served by the hosting CDN
   data/                   credited starter and deployment catalog
   scripts/                catalog and database administration helpers

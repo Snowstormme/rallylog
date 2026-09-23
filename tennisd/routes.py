@@ -250,7 +250,7 @@ def register():
                 return redirect(url_for("site.check_email"))
             session.clear()
             login_user(user)
-            flash("Welcome to Rallylog. Your diary is ready.", "success")
+            flash("Welcome to Tennisd. Your diary is ready.", "success")
             return redirect(url_for("site.my_profile"))
     return render_template("auth.html", mode="register")
 
@@ -498,7 +498,7 @@ def export_diary():
         ],
     }
     response = jsonify(payload)
-    response.headers["Content-Disposition"] = f'attachment; filename="rallylog-{current_user.username}.json"'
+    response.headers["Content-Disposition"] = f'attachment; filename="tennisd-{current_user.username}.json"'
     response.cache_control.no_store = True
     return response
 
