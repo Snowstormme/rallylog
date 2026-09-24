@@ -42,7 +42,8 @@ class TennisdFlows(unittest.TestCase):
             self.assertEqual(self.client.get(path).status_code, 200, path)
         home = self.client.get("/")
         self.assertNotIn(b"hero-counts", home.data)
-        self.assertIn(b"Create your diary", home.data)
+        self.assertNotIn(b"Start your diary", home.data)
+        self.assertNotIn(b"Make every watch count", home.data)
         self.assertIn(b"Jannik Sinner", self.client.get("/matches?q=Jannik+Sinner").data)
         self.assertEqual(self.client.get("/matches?tour=WTA").status_code, 200)
 
