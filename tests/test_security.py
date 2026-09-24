@@ -168,6 +168,33 @@ class ProductionConfig(unittest.TestCase):
         self.assertIn("user:password@", app.config["SQLALCHEMY_DATABASE_URI"])
         self.assertNotIn("***", app.config["SQLALCHEMY_DATABASE_URI"])
 
+    def test_registration_can_open_without_email_verification(self):
+        environment = {
+            "APP_ENV": "production",
+            "SECRET_KEY": "v" * 64,
+            "DATABASE_URL": "postgresql://user:password@example.com/app?sslmode=require",
+            "PUBLIC_HOST": "tennisd.example",
+            "REGISTRATION_ENABLED": "true",
+            "REQUIRE_EMAIL_VERIFICATION": "false",
+        }
+        with patch.dict(os.environ, environment, clear=True):
+            app = create_app({"TESTING": True})
+        self.assertTrue(app.config["REGISTRATION_ENABLED"])
+        self.assertFalse(app.config["REQUIRE_EMAIL_VERIFICATION"])
+
+    def test_verified_registration_requires_email_delivery(self):
+        environment = {
+            "APP_ENV": "production",
+            "SECRET_KEY": "v" * 64,
+            "DATABASE_URL": "postgresql://user:password@example.com/app?sslmode=require",
+            "PUBLIC_HOST": "tennisd.example",
+            "REGISTRATION_ENABLED": "true",
+            "REQUIRE_EMAIL_VERIFICATION": "true",
+        }
+        with patch.dict(os.environ, environment, clear=True):
+            with self.assertRaisesRegex(RuntimeError, "Email delivery"):
+                create_app({"TESTING": True})
+
 
 if __name__ == "__main__":
     unittest.main()

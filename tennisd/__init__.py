@@ -72,7 +72,9 @@ def create_app(test_config=None):
         PERMANENT_SESSION_LIFETIME=timedelta(days=7),
         TRUSTED_HOSTS=trusted_hosts if production and trusted_hosts else None,
         PUBLIC_BASE_URL=f"https://{public_host}" if production and public_host else "http://127.0.0.1:5000",
-        REQUIRE_EMAIL_VERIFICATION=production,
+        REQUIRE_EMAIL_VERIFICATION=os.environ.get(
+            "REQUIRE_EMAIL_VERIFICATION", "true" if production else "false"
+        ).lower() == "true",
         REGISTRATION_ENABLED=os.environ.get("REGISTRATION_ENABLED", "true") == "true",
         RESEND_API_KEY=os.environ.get("RESEND_API_KEY", ""),
         MAIL_FROM=os.environ.get("MAIL_FROM", ""),
@@ -99,14 +101,14 @@ def create_app(test_config=None):
             raise RuntimeError("Set PUBLIC_HOST or RENDER_EXTERNAL_HOSTNAME in production.")
         if app.config["AUTO_CREATE_DB"]:
             raise RuntimeError("Production must initialize the database outside the web process.")
-        if app.config["REGISTRATION_ENABLED"] and (
-            not app.config["RESEND_API_KEY"] or not app.config["MAIL_FROM"]
+        if (
+            app.config["REGISTRATION_ENABLED"]
+            and app.config["REQUIRE_EMAIL_VERIFICATION"]
+            and (
+                not app.config["RESEND_API_KEY"] or not app.config["MAIL_FROM"]
+            )
         ):
             raise RuntimeError("Email delivery must be configured before opening registration.")
-        if app.config["REGISTRATION_ENABLED"] and (
-            not app.config["ADMIN_EMAIL"] or not app.config["CONTACT_EMAIL"]
-        ):
-            raise RuntimeError("Set ADMIN_EMAIL and CONTACT_EMAIL before opening registration.")
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 
     db.init_app(app)
