@@ -165,6 +165,8 @@ class ProductionConfig(unittest.TestCase):
         )
         self.assertEqual(app.config["PUBLIC_BASE_URL"], "https://tennisd.vercel.app")
         self.assertEqual(app.instance_path, "/tmp/tennisd-instance")
+        self.assertIn("user:password@", app.config["SQLALCHEMY_DATABASE_URI"])
+        self.assertNotIn("***", app.config["SQLALCHEMY_DATABASE_URI"])
 
 
 if __name__ == "__main__":

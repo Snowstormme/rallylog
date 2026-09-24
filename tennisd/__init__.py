@@ -46,7 +46,9 @@ def create_app(test_config=None):
         mode = parsed.query.get("sslmode", "require")
         if mode not in ("require", "verify-ca", "verify-full"):
             raise RuntimeError("Production PostgreSQL must require TLS.")
-        database_url = str(parsed.update_query_dict({"sslmode": mode}))
+        database_url = parsed.update_query_dict({"sslmode": mode}).render_as_string(
+            hide_password=False
+        )
 
     public_host = (
         os.environ.get("PUBLIC_HOST")
