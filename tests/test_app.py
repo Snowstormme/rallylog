@@ -40,6 +40,9 @@ class TennisdFlows(unittest.TestCase):
     def test_core_pages_and_search(self):
         for path in ("/", "/matches", "/players", "/about", "/privacy", f"/matches/{self.match_id}"):
             self.assertEqual(self.client.get(path).status_code, 200, path)
+        home = self.client.get("/")
+        self.assertNotIn(b"hero-counts", home.data)
+        self.assertIn(b"Create your diary", home.data)
         self.assertIn(b"Jannik Sinner", self.client.get("/matches?q=Jannik+Sinner").data)
         self.assertEqual(self.client.get("/matches?tour=WTA").status_code, 200)
 
@@ -103,6 +106,7 @@ class TennisdFlows(unittest.TestCase):
 
     def test_profile_settings_follow_and_html_escaping(self):
         self.register("alice")
+        self.assertNotIn(b"Open your diary", self.client.get("/").data)
         with self.app.app_context():
             player_id = db.session.scalar(select(Player.id).limit(1))
         self.client.post(f"/players/{player_id}/follow", data={"csrf_token": self.token()})

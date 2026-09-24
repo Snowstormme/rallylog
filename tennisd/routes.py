@@ -52,13 +52,9 @@ def home():
         .options(joinedload(Review.user), joinedload(Review.match))
         .order_by(Review.created_at.desc()).limit(4)
     ).all()
-    counts = {
-        "matches": db.session.scalar(select(func.count(Match.id))),
-        "players": db.session.scalar(select(func.count(Player.id))),
-    }
     return render_template(
         "home.html", featured=featured, recent_matches=recent_matches,
-        recent_reviews=recent_reviews, counts=counts,
+        recent_reviews=recent_reviews,
     )
 
 
