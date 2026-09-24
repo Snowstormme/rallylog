@@ -1,0 +1,37 @@
+name: Sync live Grand Slam matches
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Feed to refresh
+        required: true
+        default: auto
+        type: choice
+        options: [auto, live, upcoming]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-tennis-sync
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Refresh Grand Slam slate
+        env:
+          DATABASE_URL: ${{ secrets.LIVE_SYNC_DATABASE_URL }}
+          LIVETENNISAPI_KEY: ${{ secrets.LIVETENNISAPI_KEY }}
+          AUTO_CREATE_DB: 'false'
+        run: python scripts/sync_live_tennis.py "${{ inputs.mode || 'auto' }}"

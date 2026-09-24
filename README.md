@@ -24,7 +24,7 @@ That command downloads ATP and WTA CSV files from the [Sackmann archive](https:/
 ## What is here
 
 - **Discover:** featured match, archive highlights and recent public reviews.
-- **Matches:** search by player or tournament; filter by tour, surface, level and year.
+- **Matches:** Grand Slam live scores and the next seven days of ATP/WTA singles, plus historical search by player, tournament, tour, surface, level and year.
 - **Match page:** score, recorded serve statistics, community rating, reviews and comments.
 - **Diary:** one editable entry per user and match with viewing date, optional half-star rating, review, favorite, spoiler flag and public/private choice.
 - **Watchlist:** save matches to watch later; logging a match removes it from the watchlist.
@@ -50,6 +50,7 @@ That command downloads ATP and WTA CSV files from the [Sackmann archive](https:/
 - Responses include HSTS in production, CSP, clickjacking, MIME-sniffing, referrer and browser-permission protections. Authenticated pages are not cacheable.
 - User content is escaped by Jinja. Private diary entries and watchlists are never returned on another member's profile.
 - Profile photos are validated, resized to at most 640 × 640, converted to WebP and stored in PostgreSQL rather than the ephemeral Vercel filesystem.
+- Player portraits use a linked Wikidata image first, then an exact-name English Wikipedia tennis result. A designed portrait placeholder remains when neither project has a freely hosted image.
 - The web database role receives data access but no schema creation rights. The owner connection is reserved for initialization and recovery.
 - Users can export or delete their data. The privacy page explains stored fields and third-party processing.
 
@@ -63,6 +64,12 @@ Tennisd can run as one Flask function on Vercel Hobby with automatic HTTPS and r
 4. Create a Resend account and verify a sending domain. Tennisd uses its HTTPS API. Set `RESEND_API_KEY`, `MAIL_FROM`, `ADMIN_EMAIL` and `CONTACT_EMAIL` in Vercel.
 5. Import the Git repository into a Vercel Hobby project. Set `APP_ENV=production`, `REGISTRATION_ENABLED=false`, a random 64-character `SECRET_KEY`, and `DATABASE_URL`. Vercel detects `wsgi.py` as the Flask entry point and supplies its hostname to the app.
 6. Verify `/healthz`, the catalog, account email, login, password reset, reports, export and account deletion. Then change `REGISTRATION_ENABLED` to `true` and redeploy.
+
+### Live Grand Slam feed
+
+Tennisd mirrors only ATP and WTA singles at the Australian Open, Roland Garros, Wimbledon and US Open. Create a free Live Tennis API key, add it to GitHub as `LIVETENNISAPI_KEY`, and add the limited `rallylog_web` pooled TLS connection as `LIVE_SYNC_DATABASE_URL`. Run `scripts/add_live_matches.sql` once as the database owner, then enable the **Sync live Grand Slam matches** workflow. It refreshes the stored live slate every 15 minutes and replaces those cards' score text in open browsers once a minute. One midnight UTC hour refreshes fixtures for the next seven days instead, keeping the workflow within the free request allowance.
+
+This is near-live on the free plan rather than point-by-point streaming. The API key is used only by GitHub Actions and must not be placed in Vercel or sent to the browser.
 
 The checked-in [Render Blueprint](render.yaml) remains an alternative host configuration. Neon free compute sleeps while idle, so the first request after inactivity can be slower. Free plans suit an early public preview and are not an uptime guarantee.
 

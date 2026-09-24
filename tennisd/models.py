@@ -125,6 +125,27 @@ class Match(db.Model):
     reviews = db.relationship("Review", back_populates="match", cascade="all, delete-orphan")
 
 
+class LiveMatch(db.Model):
+    """Current Grand Slam fixture mirrored from the live provider."""
+
+    provider_id = db.Column(db.String(64), primary_key=True)
+    status = db.Column(db.String(12), nullable=False, index=True)
+    tour = db.Column(db.String(3), nullable=False, index=True)
+    tournament = db.Column(db.String(160), nullable=False)
+    tournament_id = db.Column(db.String(80))
+    surface = db.Column(db.String(12), nullable=False)
+    round = db.Column(db.String(32))
+    starts_at = db.Column(db.DateTime(timezone=True), index=True)
+    player1_name = db.Column(db.String(120), nullable=False)
+    player2_name = db.Column(db.String(120), nullable=False)
+    player1_provider_id = db.Column(db.String(32))
+    player2_provider_id = db.Column(db.String(32))
+    score = db.Column(db.String(160), default="", nullable=False)
+    server = db.Column(db.Integer)
+    provider_updated_at = db.Column(db.DateTime(timezone=True))
+    synced_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+
+
 class Review(db.Model):
     __table_args__ = (
         UniqueConstraint("user_id", "match_id", name="uq_user_match_review"),

@@ -1,0 +1,30 @@
+name: Add live matches table
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+      - run: pip install 'psycopg[binary]>=3.2,<4'
+      - name: Apply live match schema
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_OWNER_URL }}
+        run: |
+          python - <<'PY'
+          import os, re
+          import psycopg
+          url = re.sub(r'^postgresql\+[^:]+://', 'postgresql://', os.environ['DATABASE_URL'])
+          with psycopg.connect(url) as connection:
+              connection.execute(open('scripts/add_live_matches.sql').read())
+          print('Live match schema is ready.')
+          PY

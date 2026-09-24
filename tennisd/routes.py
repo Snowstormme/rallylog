@@ -1,6 +1,8 @@
 import hmac
+import html
 import io
 import re
+import unicodedata
 from functools import lru_cache
 from datetime import date, datetime, timedelta, timezone
 from urllib.parse import quote, urlsplit
@@ -9,11 +11,11 @@ import requests
 from flask import Blueprint, Response, abort, current_app, flash, jsonify, redirect, render_template, request, send_file, session, url_for
 from flask_login import current_user, login_required, login_user, logout_user
 from PIL import Image, ImageOps, UnidentifiedImageError
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import delete, func, inspect, or_, select
 from sqlalchemy.orm import aliased, joinedload
 
 from . import db
-from .models import AuthState, AuthToken, Comment, FollowedPlayer, Friendship, Match, Player, ProfileImage, Report, Review, User, WatchlistItem, utcnow
+from .models import AuthState, AuthToken, Comment, FollowedPlayer, Friendship, LiveMatch, Match, Player, ProfileImage, Report, Review, User, WatchlistItem, utcnow
 from .prize_money import update_prize_money
 from .security import client_ip, limit_action, send_account_email, valid_token
 from .stats import community_statistics, diary_statistics, percent, player_statistics
@@ -32,10 +34,66 @@ def match_location(match):
     return TOURNAMENT_LOCATIONS.get(match.tournament.lower(), "Location unavailable")
 
 
+def current_match_rows(status):
+    """Return an empty slate while a new deployment is waiting for its migration."""
+    if not inspect(db.engine).has_table(LiveMatch.__tablename__):
+        return []
+    statement = select(LiveMatch).where(LiveMatch.status == status)
+    if status == "upcoming":
+        statement = statement.where(
+            LiveMatch.starts_at >= utcnow() - timedelta(hours=6),
+            LiveMatch.starts_at <= utcnow() + timedelta(days=7),
+        )
+    return db.session.scalars(
+        statement.order_by(LiveMatch.starts_at, LiveMatch.tournament, LiveMatch.provider_id)
+    ).all()
+
+
 @lru_cache(maxsize=512)
 def wikimedia_player_photo(wikidata_id):
     if not wikidata_id or not re.fullmatch(r"Q[1-9][0-9]*", wikidata_id):
         return None
+
+
+def normalized_person_name(value):
+    value = unicodedata.normalize("NFKD", value or "")
+    return re.sub(r"[^a-z0-9]+", " ", value.casefold()).strip()
+
+
+@lru_cache(maxsize=2048)
+def wikipedia_player_photo(name):
+    """Find a public Wikipedia thumbnail when the catalog has no Wikidata link."""
+    if not name or len(name) > 120:
+        return None
+    try:
+        response = requests.get(
+            "https://en.wikipedia.org/w/api.php",
+            params={
+                "action": "query", "generator": "search",
+                "gsrsearch": f'intitle:"{name}" tennis', "gsrnamespace": 0,
+                "gsrlimit": 5, "prop": "pageimages", "piprop": "thumbnail",
+                "pithumbsize": 420, "format": "json",
+            },
+            headers={"User-Agent": "Tennisd/1.0 (player portraits)"}, timeout=4,
+        )
+        response.raise_for_status()
+        target = normalized_person_name(name)
+        pages = (response.json().get("query") or {}).get("pages") or {}
+        for page in pages.values():
+            title = re.sub(r"\s*\([^)]*\)\s*$", "", page.get("title", ""))
+            if normalized_person_name(title) == target:
+                source = (page.get("thumbnail") or {}).get("source")
+                if source and source.startswith((
+                    "https://upload.wikimedia.org/", "https://thumb.wikimedia.org/"
+                )):
+                    return source
+    except (AttributeError, TypeError, ValueError, requests.RequestException):
+        pass
+    return None
+
+
+def public_player_photo(player):
+    return wikimedia_player_photo(player.wikidata_id) or wikipedia_player_photo(player.name)
     try:
         response = requests.get(
             f"https://www.wikidata.org/wiki/Special:EntityData/{wikidata_id}.json",
@@ -111,13 +169,13 @@ def home():
 @site.get("/players/<player_id>/photo")
 def player_photo(player_id):
     player = db.get_or_404(Player, player_id)
-    photo_url = wikimedia_player_photo(player.wikidata_id)
+    photo_url = public_player_photo(player)
     if photo_url:
         response = redirect(photo_url)
         response.cache_control.public = True
         response.cache_control.max_age = 604800
         return response
-    initials = "".join(part[0] for part in player.name.split()[:2]).upper()
+    initials = html.escape("".join(part[0] for part in player.name.split()[:2]).upper())
     svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="420" height="560" viewBox="0 0 420 560"><defs><linearGradient id="g" x2="0" y2="1"><stop stop-color="#335b48"/><stop offset="1" stop-color="#13271f"/></linearGradient></defs><rect width="420" height="560" fill="url(#g)"/><circle cx="210" cy="190" r="82" fill="#9fb4a4" opacity=".38"/><path d="M70 560c8-150 65-226 140-226s132 76 140 226" fill="#9fb4a4" opacity=".38"/><text x="210" y="305" text-anchor="middle" fill="#d6ed80" font-family="Arial,sans-serif" font-size="64" font-weight="700">{initials}</text></svg>'''
     response = Response(svg, mimetype="image/svg+xml")
     response.cache_control.public = True
@@ -172,10 +230,26 @@ def matches():
     )
     page = max(1, request.args.get("page", 1, type=int))
     pagination = db.paginate(statement, page=page, per_page=18, error_out=False)
+    live_matches = current_match_rows("live")
+    upcoming_matches = current_match_rows("upcoming")
     return render_template(
         "matches.html", pagination=pagination, query=query, tour=tour,
         surface=surface, year=year, level=level, order=order, match_location=match_location,
+        live_matches=live_matches, upcoming_matches=upcoming_matches,
     )
+
+
+@site.get("/api/live-matches")
+def live_matches_api():
+    matches = current_match_rows("live")
+    response = jsonify({
+        "matches": [{
+            "id": match.provider_id, "score": match.score,
+            "server": match.server, "synced_at": match.synced_at.isoformat(),
+        } for match in matches]
+    })
+    response.cache_control.no_store = True
+    return response
 
 
 @site.get("/matches/<path:match_id>")

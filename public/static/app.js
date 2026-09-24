@@ -48,4 +48,23 @@ document.addEventListener("DOMContentLoaded", () => {
     start();
   });
 
+  const liveSlate = document.querySelector("[data-live-slate]");
+  if (liveSlate) {
+    const refreshScores = async () => {
+      try {
+        const response = await fetch("/api/live-matches", { cache: "no-store" });
+        if (!response.ok) return;
+        const payload = await response.json();
+        payload.matches.forEach((match) => {
+          const card = liveSlate.querySelector(`[data-live-match="${CSS.escape(match.id)}"]`);
+          const score = card?.querySelector("[data-live-score]");
+          if (score && match.score) score.textContent = match.score;
+        });
+      } catch (_) {
+        // Keep the most recently stored score when a refresh is unavailable.
+      }
+    };
+    window.setInterval(refreshScores, 60000);
+  }
+
 });
