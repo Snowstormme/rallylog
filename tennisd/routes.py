@@ -53,10 +53,23 @@ def current_match_rows(status):
 def wikimedia_player_photo(wikidata_id):
     if not wikidata_id or not re.fullmatch(r"Q[1-9][0-9]*", wikidata_id):
         return None
+    try:
+        response = requests.get(
+            f"https://www.wikidata.org/wiki/Special:EntityData/{wikidata_id}.json",
+            headers={"Accept": "application/json", "User-Agent": "Tennisd/1.0 (player portraits)"},
+            timeout=4,
+        )
+        response.raise_for_status()
+        claim = response.json()["entities"][wikidata_id]["claims"]["P18"][0]
+        filename = claim["mainsnak"]["datavalue"]["value"]
+        return f"https://commons.wikimedia.org/wiki/Special:Redirect/file/{quote(filename, safe='')}?width=420"
+    except (KeyError, IndexError, TypeError, ValueError, requests.RequestException):
+        return None
 
 
 def normalized_person_name(value):
     value = unicodedata.normalize("NFKD", value or "")
+    value = "".join(character for character in value if not unicodedata.combining(character))
     return re.sub(r"[^a-z0-9]+", " ", value.casefold()).strip()
 
 
@@ -94,18 +107,6 @@ def wikipedia_player_photo(name):
 
 def public_player_photo(player):
     return wikimedia_player_photo(player.wikidata_id) or wikipedia_player_photo(player.name)
-    try:
-        response = requests.get(
-            f"https://www.wikidata.org/wiki/Special:EntityData/{wikidata_id}.json",
-            headers={"Accept": "application/json", "User-Agent": "Tennisd/1.0 (player portraits)"},
-            timeout=4,
-        )
-        response.raise_for_status()
-        claim = response.json()["entities"][wikidata_id]["claims"]["P18"][0]
-        filename = claim["mainsnak"]["datavalue"]["value"]
-        return f"https://commons.wikimedia.org/wiki/Special:Redirect/file/{quote(filename, safe='')}?width=420"
-    except (KeyError, IndexError, TypeError, ValueError, requests.RequestException):
-        return None
 
 
 def prepare_profile_image(upload):
@@ -321,7 +322,7 @@ def players():
         statement = statement.where(Player.name.ilike(f"%{query}%"))
     if tour in ("ATP", "WTA"):
         statement = statement.where(Player.tour == tour)
-    statement = statement.order_by(Player.name)
+    statement = statement.order_by(Player.wikidata_id.is_(None), Player.name)
     pagination = db.paginate(
         statement, page=max(1, request.args.get("page", 1, type=int)),
         per_page=24, error_out=False,

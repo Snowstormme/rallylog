@@ -2,10 +2,12 @@ import tempfile
 import unittest
 from io import BytesIO
 from pathlib import Path
+from unittest.mock import Mock, patch
 
 from PIL import Image
 from tennisd import create_app, db
 from tennisd.models import Comment, FollowedPlayer, Match, Player, ProfileImage, Report, Review, User, WatchlistItem
+from tennisd.routes import normalized_person_name, wikimedia_player_photo
 from sqlalchemy import select
 
 
@@ -75,6 +77,22 @@ class TennisdFlows(unittest.TestCase):
         profile = self.client.get(f"/players/{player_id}")
         self.assertIn(b"player-hero-photo", profile.data)
         self.assertIn(f"/players/{player_id}/photo".encode(), profile.data)
+
+    def test_wikidata_portrait_and_accented_player_name(self):
+        response = Mock()
+        response.raise_for_status.return_value = None
+        response.json.return_value = {
+            "entities": {"Q123": {"claims": {"P18": [{
+                "mainsnak": {"datavalue": {"value": "Player portrait.jpg"}}
+            }]}}}
+        }
+        wikimedia_player_photo.cache_clear()
+        with patch("tennisd.routes.requests.get", return_value=response):
+            self.assertEqual(
+                wikimedia_player_photo("Q123"),
+                "https://commons.wikimedia.org/wiki/Special:Redirect/file/Player%20portrait.jpg?width=420",
+            )
+        self.assertEqual(normalized_person_name("Iga Świątek"), "iga swiatek")
 
     def test_friend_requests_and_notifications(self):
         self.register("alice")
