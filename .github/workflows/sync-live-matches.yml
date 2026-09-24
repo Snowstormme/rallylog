@@ -31,7 +31,7 @@ jobs:
       - run: pip install -r requirements.txt
       - name: Refresh Grand Slam slate
         env:
-          DATABASE_URL: ${{ secrets.LIVE_SYNC_DATABASE_URL }}
+          DATABASE_URL: ${{ secrets.TENNISD_SYNC_DATABASE_URL }}
           LIVETENNISAPI_KEY: ${{ secrets.LIVETENNISAPI_KEY }}
           AUTO_CREATE_DB: 'false'
         run: python scripts/sync_live_tennis.py "${{ inputs.mode || 'auto' }}"

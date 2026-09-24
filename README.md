@@ -67,7 +67,7 @@ Tennisd can run as one Flask function on Vercel Hobby with automatic HTTPS and r
 
 ### Live Grand Slam feed
 
-Tennisd mirrors only ATP and WTA singles at the Australian Open, Roland Garros, Wimbledon and US Open. Create a free Live Tennis API key, add it to GitHub as `LIVETENNISAPI_KEY`, and add the limited `rallylog_web` pooled TLS connection as `LIVE_SYNC_DATABASE_URL`. Run `scripts/add_live_matches.sql` once as the database owner, then enable the **Sync live Grand Slam matches** workflow. It refreshes the stored live slate every 15 minutes and replaces those cards' score text in open browsers once a minute. One midnight UTC hour refreshes fixtures for the next seven days instead, keeping the workflow within the free request allowance.
+Tennisd mirrors only ATP and WTA singles at the Australian Open, Roland Garros, Wimbledon and US Open. Create a free Live Tennis API key, add it to GitHub as `LIVETENNISAPI_KEY`, and add the limited `rallylog_web` pooled TLS connection as `TENNISD_SYNC_DATABASE_URL`. Run `scripts/add_live_matches.sql` once as the database owner, then enable the **Sync live Grand Slam matches** workflow. It refreshes the stored live slate every 15 minutes and replaces those cards' score text in open browsers once a minute. One midnight UTC hour refreshes fixtures for the next seven days instead, keeping the workflow within the free request allowance.
 
 This is near-live on the free plan rather than point-by-point streaming. The API key is used only by GitHub Actions and must not be placed in Vercel or sent to the browser.
 
