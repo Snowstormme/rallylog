@@ -1,0 +1,6 @@
+{% extends 'base.html' %}
+{% block title %}News{% endblock %}
+{% block content %}
+<section class="page-banner"><div class="container"><p class="eyebrow">AROUND THE TOURS</p><h1>Latest news<span>.</span></h1><p>Fresh reporting from official tennis organizations and tournaments.</p></div></section>
+<div class="container page-section"><div class="news-grid">{% for source in sources %}<a class="news-source" href="{{ source.url }}" target="_blank" rel="noopener noreferrer"><small>OFFICIAL SOURCE</small><h2>{{ source.name }}</h2><p>{{ source.description }}</p><span>Read latest news</span></a>{% endfor %}</div><p class="source-note">Stories open on the publisher's website so headlines, corrections and publication times stay current.</p></div>
+{% endblock %}

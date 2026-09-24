@@ -10,7 +10,7 @@ from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import aliased, joinedload
 
 from . import db
-from .models import AuthState, AuthToken, Comment, FollowedPlayer, Match, Player, Report, Review, User, WatchlistItem, utcnow
+from .models import AuthState, AuthToken, Comment, FollowedPlayer, Friendship, Match, Player, Report, Review, User, WatchlistItem, utcnow
 from .prize_money import update_prize_money
 from .security import client_ip, limit_action, send_account_email, valid_token
 from .stats import community_statistics, diary_statistics, percent, player_statistics
@@ -172,6 +172,101 @@ def players():
         per_page=24, error_out=False,
     )
     return render_template("players.html", pagination=pagination, query=query, tour=tour)
+
+
+@site.get("/tournaments")
+def tournaments():
+    rows = db.session.execute(
+        select(
+            Match.tournament, Match.surface, Match.tour,
+            func.count(Match.id).label("matches"),
+            func.max(Match.week_start).label("latest"),
+        ).group_by(Match.tournament, Match.surface, Match.tour)
+        .order_by(func.max(Match.week_start).desc(), Match.tournament)
+    ).all()
+    return render_template("tournaments.html", tournaments=rows)
+
+
+@site.get("/search")
+def search():
+    query = request.args.get("q", "").strip()[:80]
+    players_found, matches_found, members = [], [], []
+    if query:
+        players_found = db.session.scalars(
+            select(Player).where(Player.name.ilike(f"%{query}%")).order_by(Player.name).limit(8)
+        ).all()
+        winner, loser = aliased(Player), aliased(Player)
+        matches_found = db.session.scalars(
+            select(Match).join(winner, Match.winner).join(loser, Match.loser).where(or_(
+                Match.tournament.ilike(f"%{query}%"), winner.name.ilike(f"%{query}%"),
+                loser.name.ilike(f"%{query}%"),
+            )).order_by(Match.week_start.desc()).limit(8)
+        ).all()
+        members = db.session.scalars(
+            select(User).where(or_(User.username.ilike(f"%{query}%"), User.display_name.ilike(f"%{query}%")))
+            .order_by(User.username).limit(8)
+        ).all()
+    return render_template("search.html", query=query, players=players_found, matches=matches_found, members=members)
+
+
+@site.get("/news")
+def news():
+    sources = [
+        {"name": "ATP Tour", "url": "https://www.atptour.com/en/news", "description": "Men's tour reports, interviews and tournament updates."},
+        {"name": "WTA", "url": "https://www.wtatennis.com/news", "description": "Women's tour news, match reactions and player stories."},
+        {"name": "ITF", "url": "https://www.itftennis.com/en/news-and-media/articles/", "description": "Grand Slam, team competition and world tennis news."},
+        {"name": "Wimbledon", "url": "https://www.wimbledon.com/en_GB/news/index.html", "description": "Official Championships news and features."},
+    ]
+    return render_template("news.html", sources=sources)
+
+
+@site.get("/notifications")
+@login_required
+def notifications():
+    requests_in = db.session.scalars(
+        select(Friendship).where(Friendship.addressee_id == current_user.id, Friendship.status == "pending")
+        .options(joinedload(Friendship.requester)).order_by(Friendship.created_at.desc())
+    ).all()
+    comments = db.session.scalars(
+        select(Comment).join(Review).where(Review.user_id == current_user.id, Comment.user_id != current_user.id)
+        .options(joinedload(Comment.user), joinedload(Comment.review).joinedload(Review.match))
+        .order_by(Comment.created_at.desc()).limit(30)
+    ).all()
+    return render_template("notifications.html", requests_in=requests_in, comments=comments)
+
+
+@site.post("/u/<username>/friend")
+@login_required
+def request_friend(username):
+    other = db.session.scalar(select(User).where(User.username == username.lower()))
+    if other is None:
+        abort(404)
+    if other.id == current_user.id:
+        abort(400)
+    existing = db.session.scalar(select(Friendship).where(or_(
+        (Friendship.requester_id == current_user.id) & (Friendship.addressee_id == other.id),
+        (Friendship.requester_id == other.id) & (Friendship.addressee_id == current_user.id),
+    )))
+    if existing is None:
+        db.session.add(Friendship(requester_id=current_user.id, addressee_id=other.id))
+        db.session.commit()
+        flash("Friend request sent.", "success")
+    return redirect(url_for("site.profile", username=other.username))
+
+
+@site.post("/friend-requests/<int:request_id>/<action>")
+@login_required
+def answer_friend_request(request_id, action):
+    item = db.get_or_404(Friendship, request_id)
+    if item.addressee_id != current_user.id or item.status != "pending" or action not in {"accept", "decline"}:
+        abort(403)
+    if action == "accept":
+        item.status = "accepted"
+        flash("You are now friends.", "success")
+    else:
+        db.session.delete(item)
+    db.session.commit()
+    return redirect(url_for("site.notifications"))
 
 
 @site.get("/players/<player_id>")
@@ -398,6 +493,8 @@ def profile(username):
     ).all()
     followed = []
     watchlist = []
+    friends = []
+    friend_state = None
     if own:
         followed = db.session.scalars(
             select(FollowedPlayer).where(FollowedPlayer.user_id == user.id)
@@ -408,11 +505,21 @@ def profile(username):
             .options(joinedload(WatchlistItem.match))
             .order_by(WatchlistItem.added_at.desc())
         ).all()
+        connections = db.session.scalars(select(Friendship).where(
+            or_(Friendship.requester_id == user.id, Friendship.addressee_id == user.id),
+            Friendship.status == "accepted",
+        ).options(joinedload(Friendship.requester), joinedload(Friendship.addressee))).all()
+        friends = [item.addressee if item.requester_id == user.id else item.requester for item in connections]
+    elif current_user.is_authenticated:
+        friend_state = db.session.scalar(select(Friendship.status).where(or_(
+            (Friendship.requester_id == current_user.id) & (Friendship.addressee_id == user.id),
+            (Friendship.requester_id == user.id) & (Friendship.addressee_id == current_user.id),
+        )))
     favorites = [review for review in reviews if review.is_favorite]
     return render_template(
         "profile.html", user=user, reviews=reviews,
         stats=diary_statistics(reviews), own=own, followed=followed, watchlist=watchlist,
-        favorites=favorites, active_tab=active_tab,
+        favorites=favorites, active_tab=active_tab, friends=friends, friend_state=friend_state,
     )
 
 
@@ -517,6 +624,9 @@ def delete_account():
         flash("Username or password was incorrect. Your account was not deleted.", "error")
         return redirect(url_for("site.settings"))
     user = db.session.get(User, current_user.id)
+    db.session.execute(delete(Friendship).where(or_(
+        Friendship.requester_id == user.id, Friendship.addressee_id == user.id,
+    )))
     db.session.execute(delete(Comment).where(Comment.user_id == user.id))
     db.session.execute(delete(FollowedPlayer).where(FollowedPlayer.user_id == user.id))
     db.session.execute(delete(WatchlistItem).where(WatchlistItem.user_id == user.id))

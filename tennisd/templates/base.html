@@ -18,9 +18,13 @@
     <div class="header-inner container">
       <a class="brand" href="{{ url_for('site.home') }}" aria-label="Tennisd home"><span class="brand-mark" aria-hidden="true"></span><span>TENNIS<span class="brand-accent">D</span></span></a>
       <nav class="main-nav" aria-label="Main navigation">
-        <a href="{{ url_for('site.home') }}"{% if request.endpoint == 'site.home' %} aria-current="page"{% endif %}>Discover</a>
-        <a href="{{ url_for('site.matches') }}"{% if request.endpoint in ('site.matches', 'site.match_detail') %} aria-current="page"{% endif %}>Matches</a>
-        <a href="{{ url_for('site.players') }}"{% if request.endpoint in ('site.players', 'site.player_detail') %} aria-current="page"{% endif %}>Players</a>
+        <a class="nav-animated nav-discover" href="{{ url_for('site.home') }}"{% if request.endpoint == 'site.home' %} aria-current="page"{% endif %}><span class="nav-scene" aria-hidden="true"><i></i><b></b></span>Discover</a>
+        <a class="nav-animated nav-matches" href="{{ url_for('site.matches') }}"{% if request.endpoint in ('site.matches', 'site.match_detail') %} aria-current="page"{% endif %}><span class="nav-scene" aria-hidden="true"><i></i></span>Matches</a>
+        <a class="nav-animated nav-players" href="{{ url_for('site.players') }}"{% if request.endpoint in ('site.players', 'site.player_detail') %} aria-current="page"{% endif %}><span class="nav-scene" aria-hidden="true"><i></i><b></b></span>Players</a>
+        <a class="nav-animated nav-tournaments" href="{{ url_for('site.tournaments') }}"{% if request.endpoint == 'site.tournaments' %} aria-current="page"{% endif %}><span class="nav-scene" aria-hidden="true"><i></i></span>Tournaments</a>
+        <a class="nav-animated nav-notifications" href="{{ url_for('site.notifications') if current_user.is_authenticated else url_for('site.login', next=url_for('site.notifications')) }}"{% if request.endpoint == 'site.notifications' %} aria-current="page"{% endif %}><span class="nav-scene" aria-hidden="true"><i></i><b></b></span>Notifications</a>
+        <a class="nav-animated nav-news" href="{{ url_for('site.news') }}"{% if request.endpoint == 'site.news' %} aria-current="page"{% endif %}><span class="nav-scene" aria-hidden="true"><i></i></span>News</a>
+        <a class="nav-animated nav-search" href="{{ url_for('site.search') }}"{% if request.endpoint == 'site.search' %} aria-current="page"{% endif %}><span class="nav-scene" aria-hidden="true"><i></i><b></b></span>Search</a>
       </nav>
       <div class="header-actions">
         {% if current_user.is_authenticated %}

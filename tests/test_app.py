@@ -38,7 +38,7 @@ class TennisdFlows(unittest.TestCase):
         }, follow_redirects=True)
 
     def test_core_pages_and_search(self):
-        for path in ("/", "/matches", "/players", "/about", "/privacy", f"/matches/{self.match_id}"):
+        for path in ("/", "/matches", "/players", "/tournaments", "/search", "/news", "/about", "/privacy", f"/matches/{self.match_id}"):
             self.assertEqual(self.client.get(path).status_code, 200, path)
         home = self.client.get("/")
         self.assertNotIn(b"hero-counts", home.data)
@@ -46,6 +46,24 @@ class TennisdFlows(unittest.TestCase):
         self.assertNotIn(b"Make every watch count", home.data)
         self.assertIn(b"Jannik Sinner", self.client.get("/matches?q=Jannik+Sinner").data)
         self.assertEqual(self.client.get("/matches?tour=WTA").status_code, 200)
+
+    def test_friend_requests_and_notifications(self):
+        self.register("alice")
+        self.client.post("/logout", data={"csrf_token": self.token()})
+        self.register("bob")
+        self.client.post("/u/alice/friend", data={"csrf_token": self.token()})
+        self.client.post("/logout", data={"csrf_token": self.token()})
+        self.client.get("/login")
+        self.client.post("/login", data={
+            "csrf_token": self.token(), "identity": "alice", "password": "long-test-password",
+        })
+        notifications = self.client.get("/notifications")
+        self.assertIn(b"bob", notifications.data)
+        with self.app.app_context():
+            from tennisd.models import Friendship
+            request_id = db.session.scalar(select(Friendship.id))
+        self.client.post(f"/friend-requests/{request_id}/accept", data={"csrf_token": self.token()})
+        self.assertIn(b"bob", self.client.get("/u/alice?tab=friends").data)
 
     def test_diary_comments_and_private_entries(self):
         self.assertEqual(self.register("alice").status_code, 200)

@@ -180,3 +180,18 @@ class WatchlistItem(db.Model):
     match_id = db.Column(db.String(100), db.ForeignKey("match.id"), nullable=False, index=True)
     added_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
     match = db.relationship("Match")
+
+
+class Friendship(db.Model):
+    __table_args__ = (
+        UniqueConstraint("requester_id", "addressee_id", name="uq_friend_request"),
+        CheckConstraint("requester_id <> addressee_id", name="different_friend_users"),
+        CheckConstraint("status IN ('pending', 'accepted')", name="valid_friend_status"),
+    )
+    id = db.Column(db.Integer, primary_key=True)
+    requester_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    addressee_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    status = db.Column(db.String(12), default="pending", nullable=False, index=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    requester = db.relationship("User", foreign_keys=[requester_id])
+    addressee = db.relationship("User", foreign_keys=[addressee_id])

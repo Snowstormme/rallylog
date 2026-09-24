@@ -11,7 +11,7 @@
       <p class="profile-handle">@{{ user.username }} · Member since {{ user.created_at.strftime('%b %Y') }}</p>
       {% if user.bio %}<p class="profile-bio">{{ user.bio }}</p>{% endif %}
     </div>
-    {% if own %}<a class="button button-outline" href="{{ url_for('site.settings') }}">Edit profile</a>{% endif %}
+    {% if own %}<a class="button button-outline" href="{{ url_for('site.settings') }}">Edit profile</a>{% elif current_user.is_authenticated %}{% if friend_state == 'accepted' %}<span class="relationship-state">Friends</span>{% elif friend_state == 'pending' %}<span class="relationship-state">Request pending</span>{% else %}<form method="post" action="{{ url_for('site.request_friend', username=user.username) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="button button-outline" type="submit">Add friend</button></form>{% endif %}{% endif %}
   </div>
 </section>
 <nav class="profile-tabs" aria-label="Profile sections">
@@ -48,7 +48,7 @@
 {% elif active_tab == 'likes' %}
   <section><div class="section-head"><div><p class="eyebrow">THE KEEPERS</p><h2>Liked matches<span>.</span></h2></div></div>{% if favorites %}<div class="match-grid">{% for review in favorites %}{{ match_card(review.match, review) }}{% endfor %}</div>{% else %}<div class="empty-state"><h3>No likes yet.</h3><p>Mark a diary entry as a favorite and it will appear here.</p>{% if own %}<a class="text-link" href="{{ url_for('site.matches') }}">Find a match</a>{% endif %}</div>{% endif %}</section>
 {% elif active_tab == 'friends' %}
-  <section><div class="section-head"><div><p class="eyebrow">YOUR TENNIS CIRCLE</p><h2>Friends<span>.</span></h2></div></div><div class="empty-state"><h3>Your circle is waiting.</h3><p>Friends and their recent activity will appear here as the Tennisd community grows.</p></div></section>
+  <section><div class="section-head"><div><p class="eyebrow">YOUR TENNIS CIRCLE</p><h2>Friends<span>.</span></h2></div></div>{% if friends %}<div class="member-grid">{% for friend in friends %}<a class="member-card" href="{{ url_for('site.profile', username=friend.username) }}"><span class="profile-avatar">{{ friend.display_name[0]|upper }}</span><strong>{{ friend.display_name }}</strong><small>@{{ friend.username }}</small></a>{% endfor %}</div>{% else %}<div class="empty-state"><h3>Your circle is waiting.</h3><p>Visit another member's profile to send a friend request.</p></div>{% endif %}</section>
 {% endif %}
 </div>
 {% endblock %}
