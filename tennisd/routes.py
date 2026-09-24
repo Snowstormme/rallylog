@@ -147,7 +147,7 @@ def matches():
     year = request.args.get("year", "")
     level = request.args.get("level", "")
     order = request.args.get("order", "newest")
-    statement = select(Match)
+    statement = select(Match).options(joinedload(Match.winner), joinedload(Match.loser))
     if query:
         winner = aliased(Player)
         loser = aliased(Player)
@@ -174,7 +174,7 @@ def matches():
     pagination = db.paginate(statement, page=page, per_page=18, error_out=False)
     return render_template(
         "matches.html", pagination=pagination, query=query, tour=tour,
-        surface=surface, year=year, level=level, order=order,
+        surface=surface, year=year, level=level, order=order, match_location=match_location,
     )
 
 
@@ -363,7 +363,10 @@ def player_detail(player_id):
                 FollowedPlayer.player_id == player.id,
             )
         ) is not None
-    return render_template("player.html", player=player, stats=stats, following=following)
+    return render_template(
+        "player.html", player=player, stats=stats, following=following,
+        match_location=match_location,
+    )
 
 
 @site.post("/players/<player_id>/follow")

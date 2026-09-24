@@ -48,6 +48,7 @@ class TennisdFlows(unittest.TestCase):
         self.assertNotIn(b"Make every watch count", home.data)
         self.assertIn(b"data-featured-carousel", home.data)
         self.assertIn(b"home-match-card", home.data)
+        self.assertIn(b"court-badge", home.data)
         self.assertIn(b"/photo", home.data)
         self.assertNotIn(b"nav-discover", home.data)
         for item in (b"nav-matches", b"nav-players", b"nav-tournaments", b"nav-notifications", b"nav-news", b"nav-search"):
@@ -62,6 +63,18 @@ class TennisdFlows(unittest.TestCase):
             self.assertNotIn(b"is-animating", script.data)
         self.assertIn(b"Jannik Sinner", self.client.get("/matches?q=Jannik+Sinner").data)
         self.assertEqual(self.client.get("/matches?tour=WTA").status_code, 200)
+        matches = self.client.get("/matches")
+        self.assertIn(b"archive-match-card", matches.data)
+        self.assertIn(b"court-badge", matches.data)
+        self.assertIn(b"match-portrait-left", matches.data)
+        players = self.client.get("/players")
+        self.assertIn(b"player-photo-card", players.data)
+        self.assertIn(b"/photo", players.data)
+        with self.app.app_context():
+            player_id = db.session.scalar(select(Player.id).limit(1))
+        profile = self.client.get(f"/players/{player_id}")
+        self.assertIn(b"player-hero-photo", profile.data)
+        self.assertIn(f"/players/{player_id}/photo".encode(), profile.data)
 
     def test_friend_requests_and_notifications(self):
         self.register("alice")
