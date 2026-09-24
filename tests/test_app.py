@@ -54,7 +54,7 @@ class TennisdFlows(unittest.TestCase):
         self.assertIn(b'aria-controls="auth-password"', register.data)
         with self.client.get("/static/app.js") as script:
             self.assertIn(b"data-password-toggle", script.data)
-            self.assertIn(b"is-animating", script.data)
+            self.assertNotIn(b"is-animating", script.data)
         self.assertIn(b"Jannik Sinner", self.client.get("/matches?q=Jannik+Sinner").data)
         self.assertEqual(self.client.get("/matches?tour=WTA").status_code, 200)
 
