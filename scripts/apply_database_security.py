@@ -1,6 +1,7 @@
 """Restrict the production web role and verify that it is not privileged."""
 
 import os
+import re
 
 import psycopg
 from psycopg import sql
@@ -10,10 +11,9 @@ ROLE = "rallylog_web"
 
 
 def main():
-    database_url = os.environ.get("DATABASE_URL", "")
+    database_url = os.environ.get("DATABASE_URL", "").strip()
     app_password = os.environ.get("DATABASE_APP_PASSWORD", "")
-    if database_url.startswith("postgresql+psycopg://"):
-        database_url = database_url.replace("postgresql+psycopg://", "postgresql://", 1)
+    database_url = re.sub(r"^postgresql\+[^:]+://", "postgresql://", database_url)
     if not database_url.startswith(("postgresql://", "postgres://")):
         raise RuntimeError("DATABASE_URL must be a PostgreSQL owner connection.")
 
