@@ -55,7 +55,6 @@ def home():
     counts = {
         "matches": db.session.scalar(select(func.count(Match.id))),
         "players": db.session.scalar(select(func.count(Player.id))),
-        "logs": db.session.scalar(select(func.count(Review.id))),
     }
     return render_template(
         "home.html", featured=featured, recent_matches=recent_matches,
