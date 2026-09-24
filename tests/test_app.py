@@ -108,7 +108,12 @@ class TennisdFlows(unittest.TestCase):
         self.client.post(f"/players/{player_id}/follow", data={"csrf_token": self.token()})
         self.assertIn(b"Following", self.client.get(f"/players/{player_id}").data)
         self.client.post(f"/matches/{self.match_id}/watchlist", data={"csrf_token": self.token()})
-        self.assertIn(b"Your watchlist", self.client.get("/u/alice").data)
+        profile = self.client.get("/u/alice")
+        for label in (b"Profile", b"Diary", b"Watchlist", b"Likes", b"Friends"):
+            self.assertIn(label, profile.data)
+        watchlist = self.client.get("/u/alice?tab=watchlist")
+        self.assertIn(b"Your watchlist", watchlist.data)
+        self.assertIn(b'aria-current="page">Watchlist', watchlist.data)
         response = self.client.post("/settings", data={
             "csrf_token": self.token(), "display_name": "Court Reader",
             "bio": "Grass-court fan",
@@ -121,7 +126,7 @@ class TennisdFlows(unittest.TestCase):
         }, follow_redirects=True)
         self.assertIn(b"&lt;script&gt;", response.data)
         self.assertNotIn(b"<script>alert(1)</script>", response.data)
-        self.assertIn(b"Review contains spoilers", self.client.get("/u/alice").data)
+        self.assertIn(b"Review contains spoilers", self.client.get("/u/alice?tab=diary").data)
         with self.app.app_context():
             self.assertIsNone(db.session.scalar(select(WatchlistItem.id)))
 

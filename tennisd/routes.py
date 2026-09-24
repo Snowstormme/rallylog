@@ -386,6 +386,12 @@ def profile(username):
     if user is None:
         abort(404)
     own = current_user.is_authenticated and current_user.id == user.id
+    available_tabs = {"profile", "diary", "likes"}
+    if own:
+        available_tabs.update({"watchlist", "friends"})
+    active_tab = request.args.get("tab", "profile").lower()
+    if active_tab not in available_tabs:
+        active_tab = "profile"
     statement = select(Review).where(Review.user_id == user.id)
     if not own:
         statement = statement.where(Review.is_public.is_(True))
@@ -404,11 +410,13 @@ def profile(username):
         watchlist = db.session.scalars(
             select(WatchlistItem).where(WatchlistItem.user_id == user.id)
             .options(joinedload(WatchlistItem.match))
-            .order_by(WatchlistItem.added_at.desc()).limit(8)
+            .order_by(WatchlistItem.added_at.desc())
         ).all()
+    favorites = [review for review in reviews if review.is_favorite]
     return render_template(
         "profile.html", user=user, reviews=reviews,
         stats=diary_statistics(reviews), own=own, followed=followed, watchlist=watchlist,
+        favorites=favorites, active_tab=active_tab,
     )
 
 
