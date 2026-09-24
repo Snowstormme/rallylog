@@ -1,9 +1,11 @@
 import tempfile
 import unittest
+from io import BytesIO
 from pathlib import Path
 
+from PIL import Image
 from tennisd import create_app, db
-from tennisd.models import Comment, FollowedPlayer, Match, Player, Report, Review, User, WatchlistItem
+from tennisd.models import Comment, FollowedPlayer, Match, Player, ProfileImage, Report, Review, User, WatchlistItem
 from sqlalchemy import select
 
 
@@ -44,6 +46,9 @@ class TennisdFlows(unittest.TestCase):
         self.assertNotIn(b"hero-counts", home.data)
         self.assertNotIn(b"Start your diary", home.data)
         self.assertNotIn(b"Make every watch count", home.data)
+        self.assertIn(b"data-featured-carousel", home.data)
+        self.assertIn(b"home-match-card", home.data)
+        self.assertIn(b"/photo", home.data)
         self.assertNotIn(b"nav-discover", home.data)
         for item in (b"nav-matches", b"nav-players", b"nav-tournaments", b"nav-notifications", b"nav-news", b"nav-search"):
             self.assertIn(item, home.data)
@@ -154,6 +159,20 @@ class TennisdFlows(unittest.TestCase):
         }, follow_redirects=True)
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"Court Reader", self.client.get("/u/alice").data)
+        portrait = BytesIO()
+        Image.new("RGB", (48, 64), "#d6ed80").save(portrait, "PNG")
+        portrait.seek(0)
+        response = self.client.post("/settings", data={
+            "csrf_token": self.token(), "display_name": "Court Reader",
+            "bio": "Grass-court fan", "avatar": (portrait, "portrait.png"),
+        }, content_type="multipart/form-data", follow_redirects=True)
+        self.assertIn(b"Settings saved", response.data)
+        with self.app.app_context():
+            self.assertIsNotNone(db.session.scalar(select(ProfileImage)))
+        avatar = self.client.get("/u/alice/avatar")
+        self.assertEqual(avatar.status_code, 200)
+        self.assertEqual(avatar.mimetype, "image/webp")
+        self.assertIn(b'/u/alice/avatar', self.client.get("/u/alice").data)
         response = self.client.post(f"/matches/{self.match_id}/log", data={
             "csrf_token": self.token(), "watched_on": "2025-01-30",
             "body": "<script>alert(1)</script>", "public": "on", "spoilers": "on",

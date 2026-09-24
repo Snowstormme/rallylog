@@ -1,21 +1,74 @@
 import hmac
+import io
 import re
+from functools import lru_cache
 from datetime import date, datetime, timedelta, timezone
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 
 import requests
-from flask import Blueprint, abort, current_app, flash, jsonify, redirect, render_template, request, session, url_for
+from flask import Blueprint, Response, abort, current_app, flash, jsonify, redirect, render_template, request, send_file, session, url_for
 from flask_login import current_user, login_required, login_user, logout_user
+from PIL import Image, ImageOps, UnidentifiedImageError
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import aliased, joinedload
 
 from . import db
-from .models import AuthState, AuthToken, Comment, FollowedPlayer, Friendship, Match, Player, Report, Review, User, WatchlistItem, utcnow
+from .models import AuthState, AuthToken, Comment, FollowedPlayer, Friendship, Match, Player, ProfileImage, Report, Review, User, WatchlistItem, utcnow
 from .prize_money import update_prize_money
 from .security import client_ip, limit_action, send_account_email, valid_token
 from .stats import community_statistics, diary_statistics, percent, player_statistics
 
 site = Blueprint("site", __name__)
+
+TOURNAMENT_LOCATIONS = {
+    "australian open": "Melbourne, Australia",
+    "roland garros": "Paris, France",
+    "wimbledon": "London, United Kingdom",
+    "us open": "New York, United States",
+}
+
+
+def match_location(match):
+    return TOURNAMENT_LOCATIONS.get(match.tournament.lower(), "Location unavailable")
+
+
+@lru_cache(maxsize=512)
+def wikimedia_player_photo(wikidata_id):
+    if not wikidata_id or not re.fullmatch(r"Q[1-9][0-9]*", wikidata_id):
+        return None
+    try:
+        response = requests.get(
+            f"https://www.wikidata.org/wiki/Special:EntityData/{wikidata_id}.json",
+            headers={"Accept": "application/json", "User-Agent": "Tennisd/1.0 (player portraits)"},
+            timeout=4,
+        )
+        response.raise_for_status()
+        claim = response.json()["entities"][wikidata_id]["claims"]["P18"][0]
+        filename = claim["mainsnak"]["datavalue"]["value"]
+        return f"https://commons.wikimedia.org/wiki/Special:Redirect/file/{quote(filename, safe='')}?width=420"
+    except (KeyError, IndexError, TypeError, ValueError, requests.RequestException):
+        return None
+
+
+def prepare_profile_image(upload):
+    raw = upload.read(1_500_001)
+    if not raw or len(raw) > 1_500_000:
+        raise ValueError("Choose an image smaller than 1.5 MB.")
+    try:
+        with Image.open(io.BytesIO(raw)) as source:
+            if source.width > 4096 or source.height > 4096:
+                raise ValueError("The image dimensions are too large.")
+            source.seek(0)
+            image = ImageOps.exif_transpose(source).convert("RGB")
+            image.thumbnail((640, 640), Image.Resampling.LANCZOS)
+            output = io.BytesIO()
+            image.save(output, "WEBP", quality=84, method=6)
+    except (UnidentifiedImageError, Image.DecompressionBombError, OSError):
+        raise ValueError("Choose a valid JPG, PNG or WebP image.") from None
+    data = output.getvalue()
+    if len(data) > 500_000:
+        raise ValueError("The processed image is still too large.")
+    return data
 
 
 @site.before_app_request
@@ -39,12 +92,9 @@ def safe_next(default="site.home"):
 
 @site.get("/")
 def home():
-    featured = db.session.scalar(
-        select(Match).where(Match.level == "G", Match.round == "F")
-        .order_by(Match.week_start.desc(), Match.tour).limit(1)
-    )
     recent_matches = db.session.scalars(
         select(Match).where(Match.level == "G", Match.round == "F")
+        .options(joinedload(Match.winner), joinedload(Match.loser))
         .order_by(Match.week_start.desc(), Match.tour).limit(8)
     ).all()
     recent_reviews = db.session.scalars(
@@ -53,8 +103,39 @@ def home():
         .order_by(Review.created_at.desc()).limit(4)
     ).all()
     return render_template(
-        "home.html", featured=featured, recent_matches=recent_matches,
-        recent_reviews=recent_reviews,
+        "home.html", featured_matches=recent_matches[:5], recent_matches=recent_matches,
+        recent_reviews=recent_reviews, match_location=match_location,
+    )
+
+
+@site.get("/players/<player_id>/photo")
+def player_photo(player_id):
+    player = db.get_or_404(Player, player_id)
+    photo_url = wikimedia_player_photo(player.wikidata_id)
+    if photo_url:
+        response = redirect(photo_url)
+        response.cache_control.public = True
+        response.cache_control.max_age = 604800
+        return response
+    initials = "".join(part[0] for part in player.name.split()[:2]).upper()
+    svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="420" height="560" viewBox="0 0 420 560"><defs><linearGradient id="g" x2="0" y2="1"><stop stop-color="#335b48"/><stop offset="1" stop-color="#13271f"/></linearGradient></defs><rect width="420" height="560" fill="url(#g)"/><circle cx="210" cy="190" r="82" fill="#9fb4a4" opacity=".38"/><path d="M70 560c8-150 65-226 140-226s132 76 140 226" fill="#9fb4a4" opacity=".38"/><text x="210" y="305" text-anchor="middle" fill="#d6ed80" font-family="Arial,sans-serif" font-size="64" font-weight="700">{initials}</text></svg>'''
+    response = Response(svg, mimetype="image/svg+xml")
+    response.cache_control.public = True
+    response.cache_control.max_age = 86400
+    return response
+
+
+@site.get("/u/<username>/avatar")
+def profile_avatar(username):
+    user = db.session.scalar(
+        select(User).where(User.username == username).options(joinedload(User.profile_image))
+    )
+    if user is None or user.profile_image is None:
+        abort(404)
+    image = user.profile_image
+    return send_file(
+        io.BytesIO(image.image_data), mimetype=image.mime_type,
+        etag=f"avatar-{user.id}-{int(image.updated_at.timestamp())}", max_age=86400,
     )
 
 
@@ -531,9 +612,20 @@ def settings():
         bio = request.form.get("bio", "").strip()
         current_password = request.form.get("current_password", "")
         new_password = request.form.get("new_password", "")
+        avatar_upload = request.files.get("avatar")
+        avatar_data = None
+        avatar_error = None
+        if avatar_upload and avatar_upload.filename:
+            limit_action("profile-image", str(current_user.id), 10, 3600)
+            try:
+                avatar_data = prepare_profile_image(avatar_upload)
+            except ValueError as error:
+                avatar_error = str(error)
         if new_password:
             limit_action("password-change", str(current_user.id), 5, 3600)
-        if not 1 <= len(display_name) <= 60 or len(bio) > 280:
+        if avatar_error:
+            flash(avatar_error, "error")
+        elif not 1 <= len(display_name) <= 60 or len(bio) > 280:
             flash("Display name or bio is too long.", "error")
         elif new_password and (
             not current_user.check_password(current_password) or not 10 <= len(new_password) <= 128
@@ -542,6 +634,15 @@ def settings():
         else:
             current_user.display_name = display_name
             current_user.bio = bio
+            if avatar_data is not None:
+                if current_user.profile_image is None:
+                    current_user.profile_image = ProfileImage(mime_type="image/webp", image_data=avatar_data)
+                else:
+                    current_user.profile_image.mime_type = "image/webp"
+                    current_user.profile_image.image_data = avatar_data
+                    current_user.profile_image.updated_at = utcnow()
+            elif request.form.get("remove_avatar") == "on":
+                current_user.profile_image = None
             if new_password:
                 current_user.set_password(new_password)
                 if current_user.auth_state is None:
@@ -580,6 +681,7 @@ def export_diary():
         "email": current_user.email,
         "display_name": current_user.display_name,
         "bio": current_user.bio,
+        "has_profile_photo": current_user.profile_image is not None,
         "joined_at": current_user.created_at.isoformat(),
         "diary": [
             {

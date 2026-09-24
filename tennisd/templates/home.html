@@ -1,6 +1,21 @@
 {% extends 'base.html' %}
-{% from '_macros.html' import match_card %}
+{% from '_avatars.html' import user_avatar %}
 {% block title %}Discover{% endblock %}
+{% macro player_portrait(player, side) %}<div class="match-portrait match-portrait-{{ side }}"><img src="{{ url_for('site.player_photo', player_id=player.id) }}" alt="{{ player.name }}" loading="lazy" referrerpolicy="no-referrer"><strong>{{ player.name }}</strong></div>{% endmacro %}
+{% macro showcase(match, featured=false, active=false) %}
+<a class="{{ 'featured-board featured-slide' if featured else 'home-match-card' }} surface-{{ match.surface|lower }}{% if active %} is-active{% endif %}" href="{{ url_for('site.match_detail', match_id=match.id) }}"{% if featured %} data-featured-slide{% if not active %} aria-hidden="true" tabindex="-1"{% else %} aria-hidden="false"{% endif %}{% endif %}>
+  <div class="showcase-wash" aria-hidden="true"></div>
+  {{ player_portrait(match.winner, 'left') }}
+  <div class="showcase-center">
+    <div class="showcase-kicker"><span>{{ match.tour }} · {{ 'GRAND SLAM' if match.level == 'G' else match.level }}</span><span>{{ match.week_start.year }} · {{ match.surface|upper }}</span></div>
+    <p class="showcase-event">{{ match.tournament }}</p>
+    <h3><span>{{ match.winner.name }}</span><small>vs</small><span>{{ match.loser.name }}</span></h3>
+    <p class="showcase-score">{{ match.score }}</p>
+    <div class="showcase-facts"><span><small>TOURNAMENT WEEK</small>{{ match.week_start.strftime('%d %b %Y') }}</span><span><small>LOCATION</small>{{ match_location(match) }}</span><span><small>ROUND</small>{{ match.round }}</span></div>
+  </div>
+  {{ player_portrait(match.loser, 'right') }}
+</a>
+{% endmacro %}
 {% block content %}
 <section class="home-hero">
   <div class="container hero-grid">
@@ -10,24 +25,24 @@
       <p class="hero-lede">Remember the five-set epics. Rate the finals. Keep a tennis diary that is entirely yours.</p>
       <div class="hero-actions"><a class="button" href="{{ url_for('site.matches') }}">Explore matches</a></div>
     </div>
-    {% if featured %}
-    <a class="featured-board" href="{{ url_for('site.match_detail', match_id=featured.id) }}">
+    {% if featured_matches %}
+    <div class="featured-carousel" data-featured-carousel>
       <div class="board-header"><span>THE FEATURED MATCH</span><span class="board-live-dot" aria-hidden="true"></span><span>FROM THE ARCHIVE</span></div>
-      <div class="board-court"><span class="court-line court-line-one"></span><span class="court-line court-line-two"></span><span class="court-line court-line-three"></span></div>
-      <div class="board-content"><div class="board-meta">{{ featured.tournament|upper }} <span>/</span> {{ featured.week_start.year }} <span>/</span> {{ featured.round }}</div><div class="board-player"><span>{{ featured.winner.name }}</span><span class="board-result">WIN</span></div><div class="board-player"><span>{{ featured.loser.name }}</span><span>—</span></div><div class="board-score">{{ featured.score }}</div><div class="board-bottom">VIEW MATCH</div></div>
-</a>
+      {% for match in featured_matches %}{{ showcase(match, true, loop.first) }}{% endfor %}
+      <div class="featured-controls" aria-label="Featured matches">{% for match in featured_matches %}<button type="button" data-featured-dot="{{ loop.index0 }}" aria-label="Show {{ match.winner.name }} versus {{ match.loser.name }}"{% if loop.first %} aria-current="true"{% endif %}></button>{% endfor %}</div>
+    </div>
     {% endif %}
   </div>
 </section>
 
-<section class="container home-section">
+<section class="container home-section archive-showcase">
   <div class="section-head"><div><p class="eyebrow">THE ARCHIVE</p><h2>Matches worth remembering<span>.</span></h2></div><a class="section-link" href="{{ url_for('site.matches') }}">Browse all matches</a></div>
-  <div class="match-grid">{% for match in recent_matches %}{{ match_card(match) }}{% endfor %}</div>
+  <div class="home-match-grid">{% for match in recent_matches %}{{ showcase(match) }}{% endfor %}</div>
 </section>
 
 <section class="container home-section community-home">
   <div class="section-head"><div><p class="eyebrow">AROUND THE COURT</p><h2>From the community<span>.</span></h2></div></div>
-  {% if recent_reviews %}<div class="home-reviews">{% for review in recent_reviews %}<a class="home-review" href="{{ url_for('site.match_detail', match_id=review.match_id) }}#review-{{ review.id }}"><span class="mini-avatar">{{ review.user.display_name[0]|upper }}</span><span><strong>{{ review.user.display_name }}</strong> watched <b>{{ review.match.winner.name }} vs {{ review.match.loser.name }}</b><small>{{ review.match.tournament }} · {{ review.watched_on.strftime('%d %b %Y') }}</small></span><span class="home-review-rating">{{ '★ %.1f'|format(review.rating_half / 2) if review.rating_half else 'Logged' }}</span></a>{% endfor %}</div>
+  {% if recent_reviews %}<div class="home-reviews">{% for review in recent_reviews %}<a class="home-review" href="{{ url_for('site.match_detail', match_id=review.match_id) }}#review-{{ review.id }}">{{ user_avatar(review.user, 'mini-avatar') }}<span><strong>{{ review.user.display_name }}</strong> watched <b>{{ review.match.winner.name }} vs {{ review.match.loser.name }}</b><small>{{ review.match.tournament }} · {{ review.watched_on.strftime('%d %b %Y') }}</small></span><span class="home-review-rating">{{ '★ %.1f'|format(review.rating_half / 2) if review.rating_half else 'Logged' }}</span></a>{% endfor %}</div>
   {% else %}<div class="empty-state"><h3>The first story is yours to tell.</h3><p>Log a match and the community feed will come alive.</p><a class="text-link" href="{{ url_for('site.matches') }}">Find a match</a></div>{% endif %}
 </section>
 {% endblock %}

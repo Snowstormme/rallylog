@@ -83,7 +83,7 @@ def create_app(test_config=None):
         CONTACT_EMAIL=os.environ.get("CONTACT_EMAIL", "").strip().lower(),
         SEED_FULL_CATALOG=os.environ.get("SEED_FULL_CATALOG", "true" if production else "false") == "true",
         AUTO_CREATE_DB=os.environ.get("AUTO_CREATE_DB", "false" if production else "true") == "true",
-        MAX_CONTENT_LENGTH=64 * 1024,
+        MAX_CONTENT_LENGTH=2 * 1024 * 1024,
     )
     if production:
         app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
@@ -142,7 +142,8 @@ def create_app(test_config=None):
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; script-src 'self'; "
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-            "font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; "
+            "font-src 'self' https://fonts.gstatic.com; "
+            "img-src 'self' data: https://commons.wikimedia.org https://upload.wikimedia.org https://thumb.wikimedia.org; "
             "connect-src 'self'; form-action 'self'; base-uri 'self'; "
             "frame-ancestors 'none'; object-src 'none'"
         )

@@ -28,6 +28,7 @@ class User(UserMixin, db.Model):
     reports = db.relationship("Report", back_populates="reporter", cascade="all, delete-orphan")
     auth_state = db.relationship("AuthState", back_populates="user", uselist=False, cascade="all, delete-orphan")
     auth_tokens = db.relationship("AuthToken", back_populates="user", cascade="all, delete-orphan")
+    profile_image = db.relationship("ProfileImage", back_populates="user", uselist=False, cascade="all, delete-orphan")
 
     def set_password(self, password):
         self.password_hash = PASSWORD_HASHER.hash(password)
@@ -43,6 +44,14 @@ class User(UserMixin, db.Model):
     def get_id(self):
         version = self.auth_state.session_version if self.auth_state else 0
         return f"{self.id}:{version}"
+
+
+class ProfileImage(db.Model):
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id", ondelete="CASCADE"), primary_key=True)
+    mime_type = db.Column(db.String(32), nullable=False)
+    image_data = db.Column(db.LargeBinary, nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+    user = db.relationship("User", back_populates="profile_image")
 
 
 class AuthState(db.Model):

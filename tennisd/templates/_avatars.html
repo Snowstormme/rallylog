@@ -1,0 +1,3 @@
+{% macro user_avatar(user, class_name='profile-avatar') -%}
+<span class="{{ class_name }}">{% if user.profile_image %}<img src="{{ url_for('site.profile_avatar', username=user.username) }}" alt="" loading="lazy">{% else %}{{ user.display_name[0]|upper }}{% endif %}</span>
+{%- endmacro %}

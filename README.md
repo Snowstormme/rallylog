@@ -30,7 +30,7 @@ That command downloads ATP and WTA CSV files from the [Sackmann archive](https:/
 - **Watchlist:** save matches to watch later; logging a match removes it from the watchlist.
 - **Players:** biography, imported wins and losses, surface and season splits, titles, serve metrics, frequent opponents and followed players.
 - **Profiles:** personal diary, watched surfaces, tour split, ratings and favorites.
-- **Settings:** display name, bio, password change, diary export and account deletion.
+- **Settings:** profile photo, display name, bio, password change, diary export and account deletion.
 - **Account safety:** email verification, expiring single-use password reset links and session invalidation after password changes.
 - **Community safety:** report controls and a private moderation queue for the verified administrator.
 
@@ -49,6 +49,7 @@ That command downloads ATP and WTA CSV files from the [Sackmann archive](https:/
 - Production requires HTTPS cookies, a stable secret, an allowed host, PostgreSQL over TLS, configured email delivery and contact addresses before registration can open.
 - Responses include HSTS in production, CSP, clickjacking, MIME-sniffing, referrer and browser-permission protections. Authenticated pages are not cacheable.
 - User content is escaped by Jinja. Private diary entries and watchlists are never returned on another member's profile.
+- Profile photos are validated, resized to at most 640 × 640, converted to WebP and stored in PostgreSQL rather than the ephemeral Vercel filesystem.
 - The web database role receives data access but no schema creation rights. The owner connection is reserved for initialization and recovery.
 - Users can export or delete their data. The privacy page explains stored fields and third-party processing.
 
