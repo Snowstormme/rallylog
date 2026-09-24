@@ -44,6 +44,14 @@ class TennisdFlows(unittest.TestCase):
         self.assertNotIn(b"hero-counts", home.data)
         self.assertNotIn(b"Start your diary", home.data)
         self.assertNotIn(b"Make every watch count", home.data)
+        self.assertNotIn(b"nav-discover", home.data)
+        for item in (b"nav-matches", b"nav-players", b"nav-tournaments", b"nav-notifications", b"nav-news", b"nav-search"):
+            self.assertIn(item, home.data)
+        register = self.client.get("/register")
+        self.assertIn(b'data-password-toggle', register.data)
+        self.assertIn(b'aria-controls="auth-password"', register.data)
+        with self.client.get("/static/app.js") as script:
+            self.assertIn(b"data-password-toggle", script.data)
         self.assertIn(b"Jannik Sinner", self.client.get("/matches?q=Jannik+Sinner").data)
         self.assertEqual(self.client.get("/matches?tour=WTA").status_code, 200)
 
