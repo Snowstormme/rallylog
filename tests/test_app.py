@@ -48,12 +48,13 @@ class TennisdFlows(unittest.TestCase):
         for item in (b"nav-matches", b"nav-players", b"nav-tournaments", b"nav-notifications", b"nav-news", b"nav-search"):
             self.assertIn(item, home.data)
         self.assertIn(b"mobile-notifications", home.data)
-        self.assertIn(b"<em></em><i></i><b></b>", home.data)
+        self.assertIn(b"<em></em><strong></strong><i></i><b></b>", home.data)
         register = self.client.get("/register")
         self.assertIn(b'data-password-toggle', register.data)
         self.assertIn(b'aria-controls="auth-password"', register.data)
         with self.client.get("/static/app.js") as script:
             self.assertIn(b"data-password-toggle", script.data)
+            self.assertIn(b"is-animating", script.data)
         self.assertIn(b"Jannik Sinner", self.client.get("/matches?q=Jannik+Sinner").data)
         self.assertEqual(self.client.get("/matches?tour=WTA").status_code, 200)
 

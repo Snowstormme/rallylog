@@ -11,4 +11,18 @@ document.addEventListener("DOMContentLoaded", () => {
       input.focus({ preventScroll: true });
     });
   });
+
+  document.querySelectorAll(".nav-animated").forEach((link) => {
+    let motionTimer;
+    const playMotion = () => {
+      window.clearTimeout(motionTimer);
+      link.classList.remove("is-animating");
+      void link.offsetWidth;
+      link.classList.add("is-animating");
+      motionTimer = window.setTimeout(() => link.classList.remove("is-animating"), 1500);
+    };
+
+    link.addEventListener("pointerenter", playMotion);
+    link.addEventListener("focus", playMotion);
+  });
 });
