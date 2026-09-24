@@ -12,6 +12,8 @@ ROLE = "rallylog_web"
 def main():
     database_url = os.environ.get("DATABASE_URL", "")
     app_password = os.environ.get("DATABASE_APP_PASSWORD", "")
+    if database_url.startswith("postgresql+psycopg://"):
+        database_url = database_url.replace("postgresql+psycopg://", "postgresql://", 1)
     if not database_url.startswith(("postgresql://", "postgres://")):
         raise RuntimeError("DATABASE_URL must be a PostgreSQL owner connection.")
 
