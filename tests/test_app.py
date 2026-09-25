@@ -10,6 +10,7 @@ from tennisd import create_app, db
 from tennisd.models import Comment, FollowedPlayer, Match, Player, ProfileImage, Report, Review, User, WatchlistItem
 from tennisd.news_feed import NEWS_SOURCES, curate_news_items, fetch_news_items
 from tennisd.routes import normalized_person_name, wikimedia_player_photo
+from tennisd.tournament_catalog import tournament_slug
 from sqlalchemy import select
 
 
@@ -24,7 +25,10 @@ class TennisdFlows(unittest.TestCase):
         })
         self.client = self.app.test_client()
         with self.app.app_context():
-            self.match_id = db.session.scalar(select(Match.id).limit(1))
+            match = db.session.scalar(select(Match).limit(1))
+            self.match_id = match.id
+            self.tournament_name = match.tournament
+            self.tournament_tour = match.tour
 
     def tearDown(self):
         with self.app.app_context():
@@ -74,6 +78,24 @@ class TennisdFlows(unittest.TestCase):
         players = self.client.get("/players")
         self.assertIn(b"player-photo-card", players.data)
         self.assertIn(b"/photo", players.data)
+        tournaments = self.client.get("/tournaments")
+        self.assertIn(b"Go straight to a tournament", tournaments.data)
+        self.assertIn(b"tournament-browser", tournaments.data)
+        tournament_path = (
+            f"/tournaments/{self.tournament_tour.lower()}/"
+            f"{tournament_slug(self.tournament_name)}"
+        )
+        tournament = self.client.get(tournament_path)
+        self.assertEqual(tournament.status_code, 200)
+        self.assertIn(b"tournament-hero", tournament.data)
+        self.assertIn(b"TITLE LEADERS", tournament.data)
+        self.assertIn(b"Image:", tournament.data)
+        jump = self.client.get(
+            "/tournaments", query_string={
+                "event": f"{self.tournament_tour}|{tournament_slug(self.tournament_name)}"
+            },
+        )
+        self.assertEqual(jump.headers["Location"], tournament_path)
         news = self.client.get("/news?source=wta")
         self.assertIn(b"news-feed-section", news.data)
         self.assertIn(b'aria-current="page">WTA</a>', news.data)

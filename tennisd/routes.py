@@ -20,6 +20,7 @@ from .news_feed import NEWS_SOURCES, curate_news_items, fetch_news_article, fetc
 from .prize_money import update_prize_money
 from .security import client_ip, limit_action, send_account_email, valid_token, valid_verification_code
 from .stats import community_statistics, diary_statistics, percent, player_statistics
+from .tournament_catalog import tournament_profile, tournament_slug
 
 site = Blueprint("site", __name__)
 
@@ -333,15 +334,113 @@ def players():
 
 @site.get("/tournaments")
 def tournaments():
+    selected = request.args.get("event", "")[:180]
+    if "|" in selected:
+        selected_tour, selected_slug = selected.split("|", 1)
+        if selected_tour in ("ATP", "WTA") and selected_slug:
+            return redirect(url_for(
+                "site.tournament_detail", tour=selected_tour.lower(), slug=selected_slug,
+            ))
+    query = request.args.get("q", "").strip()[:80]
+    tour = request.args.get("tour", "")
+    surface = request.args.get("surface", "")
+    level = request.args.get("level", "")
+    statement = select(
+        Match.tournament, Match.surface, Match.tour, Match.level,
+        func.count(Match.id).label("matches"),
+        func.min(Match.week_start).label("earliest"),
+        func.max(Match.week_start).label("latest"),
+    )
+    if query:
+        statement = statement.where(Match.tournament.ilike(f"%{query}%"))
+    if tour in ("ATP", "WTA"):
+        statement = statement.where(Match.tour == tour)
+    if surface in ("Hard", "Clay", "Grass", "Carpet"):
+        statement = statement.where(Match.surface == surface)
+    if level in ("G", "M", "PM", "P", "A", "I", "F", "O", "D"):
+        statement = statement.where(Match.level == level)
     rows = db.session.execute(
-        select(
-            Match.tournament, Match.surface, Match.tour,
-            func.count(Match.id).label("matches"),
-            func.max(Match.week_start).label("latest"),
-        ).group_by(Match.tournament, Match.surface, Match.tour)
-        .order_by(func.max(Match.week_start).desc(), Match.tournament)
+        statement.group_by(Match.tournament, Match.surface, Match.tour, Match.level)
+        .order_by(func.max(Match.week_start).desc(), Match.tournament, Match.tour)
     ).all()
-    return render_template("tournaments.html", tournaments=rows)
+    grouped = {}
+    for row in rows:
+        key = (row.tour, row.tournament)
+        item = grouped.setdefault(key, {
+            "tournament": row.tournament, "tour": row.tour, "matches": 0,
+            "earliest": row.earliest, "latest": row.latest, "surfaces": set(),
+            "levels": set(), "slug": tournament_slug(row.tournament),
+        })
+        item["matches"] += row.matches
+        item["earliest"] = min(item["earliest"], row.earliest)
+        item["latest"] = max(item["latest"], row.latest)
+        item["surfaces"].add(row.surface)
+        item["levels"].add(row.level)
+    tournament_rows = list(grouped.values())
+    options = db.session.execute(
+        select(Match.tournament, Match.tour).distinct().order_by(Match.tournament, Match.tour)
+    ).all()
+    return render_template(
+        "tournaments.html", tournaments=tournament_rows, options=options,
+        query=query, tour=tour, surface=surface, level=level,
+        tournament_slug=tournament_slug,
+    )
+
+
+@site.get("/tournaments/<tour>/<slug>")
+def tournament_detail(tour, slug):
+    tour = tour.upper()
+    if tour not in ("ATP", "WTA"):
+        abort(404)
+    names = db.session.scalars(
+        select(Match.tournament).where(Match.tour == tour).distinct()
+    ).all()
+    tournament_name = next((name for name in names if tournament_slug(name) == slug), None)
+    if tournament_name is None:
+        abort(404)
+    condition = (Match.tour == tour, Match.tournament == tournament_name)
+    match_rows = db.session.scalars(
+        select(Match).where(*condition)
+        .options(joinedload(Match.winner), joinedload(Match.loser))
+        .order_by(Match.week_start.desc(), Match.round.desc()).limit(12)
+    ).all()
+    finals = db.session.scalars(
+        select(Match).where(*condition, Match.round == "F")
+        .options(joinedload(Match.winner), joinedload(Match.loser))
+        .order_by(Match.week_start.desc())
+    ).all()
+    total_matches, earliest, latest = db.session.execute(
+        select(func.count(Match.id), func.min(Match.week_start), func.max(Match.week_start))
+        .where(*condition)
+    ).one()
+    title_counts = {}
+    for final in finals:
+        title_counts.setdefault(final.winner_id, {"player": final.winner, "titles": 0})
+        title_counts[final.winner_id]["titles"] += 1
+    champions = sorted(
+        title_counts.values(), key=lambda item: (-item["titles"], item["player"].name)
+    )[:8]
+    tournament_dates = db.session.scalars(
+        select(Match.week_start).where(*condition).distinct()
+    ).all()
+    years = sorted({value.year for value in tournament_dates}, reverse=True)
+    surfaces = db.session.scalars(
+        select(Match.surface).where(*condition).distinct().order_by(Match.surface)
+    ).all()
+    levels = db.session.scalars(
+        select(Match.level).where(*condition).distinct().order_by(Match.level)
+    ).all()
+    live_matches = [
+        match for match in current_match_rows("live") + current_match_rows("upcoming")
+        if match.tour == tour and match.tournament.casefold() == tournament_name.casefold()
+    ]
+    return render_template(
+        "tournament.html", tournament=tournament_name, tour=tour,
+        profile=tournament_profile(tournament_name), matches=match_rows,
+        total_matches=total_matches, total_finals=len(finals), finals=finals[:12],
+        champions=champions, years=years, surfaces=surfaces,
+        levels=levels, live_matches=live_matches, match_location=match_location,
+    )
 
 
 @site.get("/search")
