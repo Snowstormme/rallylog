@@ -13,18 +13,17 @@
       {% for source in sources %}<a href="{{ url_for('site.news', source=source.key) }}"{% if selected_source == source.key %} aria-current="page"{% endif %}>{{ source.name }}</a>{% endfor %}
     </nav>
     {% if stories %}<div class="news-feed">{% for story in stories %}
-      <a class="news-story news-story-{{ story.source_key }}" href="{{ story.url }}" target="_blank" rel="noopener noreferrer">
+      <a class="news-story news-story-{{ story.source_key }}" href="{{ url_for('site.news_story', source_key=story.source_key, story_id=story.id) }}">
         <span class="news-story-source">{{ story.source }}</span>
         <span class="news-story-copy"><small>{{ story.published_at.strftime('%d %b %Y · %H:%M UTC') }}</small><strong>{{ story.title }}</strong></span>
-        <span class="news-story-arrow" aria-hidden="true">↗</span>
       </a>
     {% endfor %}</div>{% else %}<div class="empty-state news-empty"><h3>The feed is taking a changeover.</h3><p>Open an official source below while the latest headlines reconnect.</p></div>{% endif %}
   </section>
 
   <section class="news-sources-section">
     <div class="section-head"><div><p class="eyebrow">FROM THE PUBLISHERS</p><h2>Information sources<span>.</span></h2></div></div>
-    <div class="news-grid">{% for source in sources %}<a class="news-source" href="{{ source.url }}" target="_blank" rel="noopener noreferrer"><small>OFFICIAL SOURCE</small><h3>{{ source.name }}</h3><p>{{ source.description }}</p><span>Visit publication ↗</span></a>{% endfor %}</div>
-    <p class="source-note">Headlines are collected through Google News RSS and always open on the publisher's website. Publication times and corrections remain with the source.</p>
+    <div class="news-grid">{% for source in sources %}<a class="news-source" href="{{ source.url }}" target="_blank" rel="noopener noreferrer"><small>OFFICIAL SOURCE</small><h3>{{ source.name }}</h3><p>{{ source.description }}</p><span>Visit publication</span></a>{% endfor %}</div>
+    <p class="source-note">Headlines are collected through Google News RSS. Tennisd opens a short reader preview; complete reporting, publication times and corrections remain with the source.</p>
   </section>
 </main>
 {% endblock %}

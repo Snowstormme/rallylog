@@ -16,7 +16,7 @@ from sqlalchemy.orm import aliased, joinedload
 
 from . import db
 from .models import AuthState, AuthToken, Comment, FollowedPlayer, Friendship, LiveMatch, Match, Player, ProfileImage, Report, Review, User, WatchlistItem, utcnow
-from .news_feed import NEWS_SOURCES, fetch_news_items
+from .news_feed import NEWS_SOURCES, fetch_news_article, fetch_news_items
 from .prize_money import update_prize_money
 from .security import client_ip, limit_action, send_account_email, valid_token
 from .stats import community_statistics, diary_statistics, percent, player_statistics
@@ -376,6 +376,17 @@ def news():
     return render_template(
         "news.html", sources=NEWS_SOURCES, stories=stories, selected_source=selected_source,
     )
+
+
+@site.get("/news/<source_key>/<story_id>")
+def news_story(source_key, story_id):
+    if source_key not in {source["key"] for source in NEWS_SOURCES}:
+        abort(404)
+    story = next((item for item in fetch_news_items(source_key) if item["id"] == story_id), None)
+    if story is None:
+        abort(404)
+    article = fetch_news_article(source_key, story_id, story["url"])
+    return render_template("news_story.html", story=story, article=article)
 
 
 @site.get("/notifications")

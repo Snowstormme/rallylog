@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -76,6 +77,8 @@ class TennisdFlows(unittest.TestCase):
         self.assertIn(b"news-feed-section", news.data)
         self.assertIn(b'aria-current="page">WTA</a>', news.data)
         self.assertIn(b"Information sources", news.data)
+        self.assertNotIn(b"news-story-arrow", news.data)
+        self.assertNotIn("↗".encode(), news.data)
         self.assertLess(news.data.index(b"news-feed-section"), news.data.index(b"news-sources-section"))
         with self.app.app_context():
             player_id = db.session.scalar(select(Player.id).limit(1))
@@ -98,6 +101,29 @@ class TennisdFlows(unittest.TestCase):
                 "https://commons.wikimedia.org/wiki/Special:Redirect/file/Player%20portrait.jpg?width=420",
             )
         self.assertEqual(normalized_person_name("Iga Świątek"), "iga swiatek")
+
+    def test_news_story_opens_in_tennisd_reader(self):
+        story_id = "A" * 40
+        story = {
+            "id": story_id, "title": "A final to remember", "source": "ATP Tour",
+            "source_key": "atp", "url": f"https://news.google.com/rss/articles/{story_id}",
+            "published_at": datetime(2026, 9, 25, 12, 0, tzinfo=timezone.utc),
+        }
+        article = {
+            "original_url": "https://www.atptour.com/en/news/example",
+            "description": "A concise publisher description of the final.",
+            "paragraphs": ["A short publisher preview is available inside the Tennisd reader."],
+            "image": "",
+        }
+        with patch("tennisd.routes.fetch_news_items", return_value=[story]), patch(
+            "tennisd.routes.fetch_news_article", return_value=article,
+        ):
+            response = self.client.get(f"/news/atp/{story_id}")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"news-reader", response.data)
+        self.assertIn(b"A final to remember", response.data)
+        self.assertIn(b"A short publisher preview", response.data)
+        self.assertIn(b"Open on ATP Tour", response.data)
 
     def test_friend_requests_and_notifications(self):
         self.register("alice")

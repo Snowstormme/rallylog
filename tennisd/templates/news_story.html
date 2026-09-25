@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% block title %}{{ story.title }}{% endblock %}
+{% block content %}
+<main class="news-reader">
+  <header class="news-reader-head">
+    <div class="container news-reader-head-inner">
+      <a class="back-link" href="{{ url_for('site.news', source=story.source_key) }}">BACK TO NEWS</a>
+      <p class="eyebrow">{{ story.source }} · {{ story.published_at.strftime('%d %b %Y · %H:%M UTC') }}</p>
+      <h1>{{ story.title }}</h1>
+    </div>
+  </header>
+  <article class="container news-reader-body">
+    {% if article and article.image %}<img class="news-reader-image" src="{{ article.image }}" alt="" referrerpolicy="no-referrer">{% endif %}
+    {% if article and article.description %}<p class="news-reader-lede">{{ article.description }}</p>{% endif %}
+    {% if article and article.paragraphs %}<div class="news-reader-preview">{% for paragraph in article.paragraphs %}<p>{{ paragraph }}</p>{% endfor %}</div>{% else %}<p class="news-reader-unavailable">This publisher did not provide a readable preview. The original report is available below.</p>{% endif %}
+    <aside class="news-reader-source"><p class="eyebrow">CONTINUE WITH THE PUBLISHER</p><h2>Read the complete report<span>.</span></h2><p>Tennisd shows a short publisher preview here. Reporting, updates and corrections remain with {{ story.source }}.</p><a class="button" href="{{ article.original_url if article else story.url }}" target="_blank" rel="noopener noreferrer">Open on {{ story.source }}</a></aside>
+  </article>
+</main>
+{% endblock %}
