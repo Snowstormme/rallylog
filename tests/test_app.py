@@ -123,6 +123,9 @@ class TennisdFlows(unittest.TestCase):
         verification = self.client.get("/google872d566cb03fdad0.html")
         self.assertEqual(verification.status_code, 200)
         self.assertIn(b"google-site-verification", verification.data)
+        current_verification = self.client.get("/google4394fddbd7a3b94e.html")
+        self.assertEqual(current_verification.status_code, 200)
+        self.assertIn(b"google4394fddbd7a3b94e.html", current_verification.data)
 
         robots = self.client.get("/robots.txt")
         self.assertEqual(robots.status_code, 200)

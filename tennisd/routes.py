@@ -180,6 +180,14 @@ def google_site_verification():
     )
 
 
+@site.get("/google4394fddbd7a3b94e.html")
+def google_search_console_verification():
+    return Response(
+        "google-site-verification: google4394fddbd7a3b94e.html\n",
+        content_type="text/html; charset=utf-8",
+    )
+
+
 @site.get("/robots.txt")
 def robots_txt():
     body = "\n".join((
