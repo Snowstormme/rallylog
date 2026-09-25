@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% from '_avatars.html' import user_avatar %}
 {% block title %}Discover{% endblock %}
-{% macro player_portrait(player, side) %}<div class="match-portrait match-portrait-{{ side }}"><img src="{{ url_for('site.player_photo', player_id=player.id) }}" alt="{{ player.name }}" loading="lazy" referrerpolicy="no-referrer"><strong>{{ player.name }}</strong></div>{% endmacro %}
+{% macro player_portrait(player, side) %}<div class="match-portrait match-portrait-{{ side }}"><img src="{{ url_for('site.player_photo', player_id=player.id, v=2) }}" alt="{{ player.name }}" loading="lazy" referrerpolicy="no-referrer"><strong>{{ player.name }}</strong></div>{% endmacro %}
 {% macro showcase(match, featured=false, active=false) %}
 <a class="{{ 'featured-board featured-slide' if featured else 'home-match-card' }} surface-{{ match.surface|lower }}{% if active %} is-active{% endif %}" href="{{ url_for('site.match_detail', match_id=match.id) }}"{% if featured %} data-featured-slide{% if not active %} aria-hidden="true" tabindex="-1"{% else %} aria-hidden="false"{% endif %}{% endif %}>
   <div class="showcase-wash" aria-hidden="true"></div>

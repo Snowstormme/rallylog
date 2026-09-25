@@ -11,7 +11,7 @@
 <a class="archive-match-card surface-{{ match.surface|lower }}" href="{{ url_for('site.match_detail', match_id=match.id) }}">
   <span class="showcase-wash" aria-hidden="true"></span>
   <span class="match-portrait match-portrait-left">
-    <img src="{{ url_for('site.player_photo', player_id=match.winner.id) }}" alt="{{ match.winner.name }}" loading="lazy" referrerpolicy="no-referrer">
+    <img src="{{ url_for('site.player_photo', player_id=match.winner.id, v=2) }}" alt="{{ match.winner.name }}" loading="lazy" referrerpolicy="no-referrer">
     <strong>{{ match.winner.name }}</strong>
   </span>
   <span class="archive-match-center">
@@ -23,7 +23,7 @@
     <span class="archive-match-facts"><span><small>TOURNAMENT WEEK</small>{{ match.week_start.strftime('%d %b %Y') }}</span><span><small>LOCATION</small>{{ match_location(match) }}</span><span><small>ROUND</small>{{ match.round }}</span></span>
   </span>
   <span class="match-portrait match-portrait-right">
-    <img src="{{ url_for('site.player_photo', player_id=match.loser.id) }}" alt="{{ match.loser.name }}" loading="lazy" referrerpolicy="no-referrer">
+    <img src="{{ url_for('site.player_photo', player_id=match.loser.id, v=2) }}" alt="{{ match.loser.name }}" loading="lazy" referrerpolicy="no-referrer">
     <strong>{{ match.loser.name }}</strong>
   </span>
 </a>
