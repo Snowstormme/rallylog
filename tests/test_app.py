@@ -8,7 +8,7 @@ from unittest.mock import Mock, patch
 from PIL import Image
 from tennisd import create_app, db
 from tennisd.models import Comment, FollowedPlayer, Match, Player, ProfileImage, Report, Review, User, WatchlistItem
-from tennisd.news_feed import curate_news_items, fetch_news_items
+from tennisd.news_feed import NEWS_SOURCES, curate_news_items, fetch_news_items
 from tennisd.routes import normalized_person_name, wikimedia_player_photo
 from sqlalchemy import select
 
@@ -142,19 +142,25 @@ class TennisdFlows(unittest.TestCase):
 
         with patch("tennisd.news_feed._source_items", side_effect=source_items):
             stories = fetch_news_items("all", now=published)
-        self.assertEqual(len(stories), 160)
+        self.assertEqual(len(stories), 40 * len(NEWS_SOURCES))
 
     def test_news_curation_keeps_recent_and_only_important_older_stories(self):
         now = datetime(2026, 9, 25, 12, 0, tzinfo=timezone.utc)
         stories = [
             {"id": "today", "title": "A routine opening-round win", "published_at": now - timedelta(hours=3)},
+            {"id": "today-copy", "title": "A routine opening-round win", "published_at": now - timedelta(hours=4)},
             {"id": "yesterday", "title": "Players arrive for the tournament", "published_at": now - timedelta(hours=30)},
             {"id": "old-routine", "title": "Practice gallery from the tour", "published_at": now - timedelta(days=3)},
             {"id": "old-major", "title": "World No. 1 withdraws with injury", "published_at": now - timedelta(days=4)},
+            {"id": "older-routine", "title": "Another practice gallery", "published_at": now - timedelta(days=9)},
+            {"id": "older-major", "title": "Former champion retires", "published_at": now - timedelta(days=9)},
             {"id": "too-old", "title": "Grand Slam champion retires", "published_at": now - timedelta(days=20)},
         ]
         selected = curate_news_items(stories, now=now)
-        self.assertEqual([story["id"] for story in selected], ["today", "yesterday", "old-major"])
+        self.assertEqual(
+            [story["id"] for story in selected],
+            ["today", "yesterday", "old-routine", "old-major", "older-major"],
+        )
 
     def test_friend_requests_and_notifications(self):
         self.register("alice")

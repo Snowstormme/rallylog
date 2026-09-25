@@ -45,6 +45,38 @@ NEWS_SOURCES = (
         "search": "site:wimbledon.com/en_GB/news",
         "description": "Official Championships news and features.",
     },
+    {
+        "key": "bbc",
+        "name": "BBC Sport",
+        "url": "https://www.bbc.com/sport/tennis",
+        "domain": "bbc.com",
+        "search": "site:bbc.com/sport/tennis",
+        "description": "International tennis reporting, results and major tournament coverage.",
+    },
+    {
+        "key": "espn",
+        "name": "ESPN Tennis",
+        "url": "https://www.espn.com/tennis/",
+        "domain": "espn.com",
+        "search": "site:espn.com/tennis",
+        "description": "Breaking tennis news, tournament reporting and player updates.",
+    },
+    {
+        "key": "sky",
+        "name": "Sky Sports",
+        "url": "https://www.skysports.com/tennis",
+        "domain": "skysports.com",
+        "search": "site:skysports.com/tennis",
+        "description": "Tour news, interviews and reporting from major tennis events.",
+    },
+    {
+        "key": "tennis365",
+        "name": "Tennis365",
+        "url": "https://www.tennis365.com/",
+        "domain": "tennis365.com",
+        "search": "site:tennis365.com",
+        "description": "Daily tour reporting, analysis and player stories.",
+    },
 )
 
 IMPORTANT_NEWS_PATTERNS = (
@@ -85,6 +117,10 @@ def _source_items(source_key, cache_window):
             if publisher_name and title.endswith(suffix):
                 title = title[:-len(suffix)].strip()
                 break
+        if source_key == "tennis365" and re.search(r"\bChallenger\b.*\d{2}/\d{2}/\d{4}$", title):
+            continue
+        if source_key == "sky" and title.startswith("Sports News, Transfers, Scores"):
+            continue
         link = (item.findtext("link") or "").strip()
         if not title or not link.startswith("https://news.google.com/"):
             continue
@@ -119,21 +155,31 @@ def fetch_news_items(source_key="all", now=None):
     return stories
 
 
-def curate_news_items(stories, now=None, recent_hours=36, important_days=7, important_limit=8):
-    """Keep every recent headline, plus a small set of meaningful older stories."""
+def curate_news_items(
+    stories, now=None, recent_hours=48, weekly_days=7, weekly_limit=28,
+    important_days=14, important_limit=6,
+):
+    """Keep all new headlines, a useful week view, and a few major older stories."""
     now = now or datetime.now(timezone.utc)
     recent_cutoff = now - timedelta(hours=recent_hours)
+    weekly_cutoff = now - timedelta(days=weekly_days)
     important_cutoff = now - timedelta(days=important_days)
-    recent, important = [], []
+    recent, weekly, important, seen_titles = [], [], [], set()
     for story in stories:
         published_at = story.get("published_at")
         if not published_at or published_at > now + timedelta(hours=2):
             continue
+        normalized_title = re.sub(r"\W+", " ", story.get("title", "").lower()).strip()
+        if not normalized_title or normalized_title in seen_titles:
+            continue
+        seen_titles.add(normalized_title)
         if published_at >= recent_cutoff:
             recent.append(story)
+        elif published_at >= weekly_cutoff:
+            weekly.append(story)
         elif published_at >= important_cutoff and IMPORTANT_NEWS_RE.search(story.get("title", "")):
             important.append(story)
-    selected = recent + important[:important_limit]
+    selected = recent + weekly[:weekly_limit] + important[:important_limit]
     selected.sort(key=lambda story: story["published_at"], reverse=True)
     return selected
 

@@ -144,7 +144,9 @@ def create_app(test_config=None):
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
             "font-src 'self' https://fonts.gstatic.com; "
             "img-src 'self' data: https://commons.wikimedia.org https://upload.wikimedia.org https://thumb.wikimedia.org "
-            "https://www.atptour.com https://photoresources.wtatennis.com https://content.wimbledon.com; "
+            "https://www.atptour.com https://photoresources.wtatennis.com https://content.wimbledon.com "
+            "https://ichef.bbci.co.uk https://a3.espncdn.com https://e0.365dm.com "
+            "https://d2me2qg8dfiw8u.cloudfront.net; "
             "connect-src 'self'; form-action 'self'; base-uri 'self'; "
             "frame-ancestors 'none'; object-src 'none'"
         )
