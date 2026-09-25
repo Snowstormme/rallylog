@@ -121,7 +121,13 @@ class TennisdFlows(unittest.TestCase):
         }, follow_redirects=True)
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"A final worth revisiting.", response.data)
-        self.assertIn(b"4.5", self.client.get("/u/alice").data)
+        profile = self.client.get("/u/alice")
+        self.assertIn(b"9.0", profile.data)
+        self.assertIn(b"profile-dashboard", profile.data)
+        self.assertIn(b"favorite-four", profile.data)
+        self.assertIn(b"profile-diary-list", profile.data)
+        self.assertIn(b"rating-spectrum", profile.data)
+        self.assertIn(b"9 out of 10: 1 match", profile.data)
         with self.app.app_context():
             review_id = db.session.scalar(select(Review.id))
 

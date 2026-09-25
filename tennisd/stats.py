@@ -109,10 +109,12 @@ def diary_statistics(reviews):
         "logs": len(reviews),
         "favorites": sum(review.is_favorite for review in reviews),
         "average": round(sum(ratings) / len(ratings), 1) if ratings else None,
+        "average_ten": round(sum(rating * 2 for rating in ratings) / len(ratings), 1) if ratings else None,
         "surfaces": surfaces.most_common(),
         "tours": tours.most_common(),
         "players": players.most_common(5),
         "years": Counter(review.watched_on.year for review in reviews).most_common(),
         "rating_bands": [(stars, sum(ceil(rating) == stars for rating in ratings)) for stars in range(5, 0, -1)],
+        "rating_scale": [(score, sum(review.rating_half == score for review in reviews)) for score in range(1, 11)],
         "rated_count": len(ratings),
     }
