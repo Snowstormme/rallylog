@@ -45,7 +45,7 @@ That command downloads ATP and WTA CSV files from the [Sackmann archive](https:/
 
 - New passwords use Argon2id with OWASP's 19 MiB / 2 iteration baseline. Existing Werkzeug hashes are accepted and upgraded after a successful login.
 - Every state-changing form requires a session CSRF token. Login, registration, password reset, account deletion and reports use database-backed limits that survive web restarts.
-- Email verification and reset tokens are random, stored only as SHA-256 digests and deleted after use. Reset and password change invalidate older sessions.
+- Email verification uses single-use six-digit codes that expire after 10 minutes. Only keyed digests are stored. Password reset links expire after 30 minutes, and password changes invalidate older sessions.
 - Production requires HTTPS cookies, a stable secret, an allowed host, PostgreSQL over TLS, configured email delivery and contact addresses before registration can open.
 - Responses include HSTS in production, CSP, clickjacking, MIME-sniffing, referrer and browser-permission protections. Authenticated pages are not cacheable.
 - User content is escaped by Jinja. Private diary entries and watchlists are never returned on another member's profile.

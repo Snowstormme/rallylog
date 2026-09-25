@@ -18,7 +18,7 @@ from . import db
 from .models import AuthState, AuthToken, Comment, FollowedPlayer, Friendship, LiveMatch, Match, Player, ProfileImage, Report, Review, User, WatchlistItem, utcnow
 from .news_feed import NEWS_SOURCES, curate_news_items, fetch_news_article, fetch_news_items
 from .prize_money import update_prize_money
-from .security import client_ip, limit_action, send_account_email, valid_token
+from .security import client_ip, limit_action, send_account_email, valid_token, valid_verification_code
 from .stats import community_statistics, diary_statistics, percent, player_statistics
 
 site = Blueprint("site", __name__)
@@ -575,7 +575,8 @@ def register():
             if current_app.config["REQUIRE_EMAIL_VERIFICATION"]:
                 try:
                     send_account_email(user, "verify")
-                    flash("Check your email to verify your account before logging in.", "success")
+                    session["verification_email"] = user.email
+                    flash("We sent a six-digit verification code to your email.", "success")
                 except requests.RequestException:
                     current_app.logger.exception("Verification email delivery failed")
                     flash("We could not send your email. Use the resend link shortly.", "error")
@@ -615,9 +616,26 @@ def login():
     return render_template("auth.html", mode="login")
 
 
-@site.get("/check-email")
+@site.route("/check-email", methods=["GET", "POST"])
 def check_email():
-    return render_template("auth_action.html", mode="check")
+    email = session.get("verification_email", "")
+    if request.method == "POST":
+        limit_action("verify-code-ip", client_ip(), 20, 900)
+        email = request.form.get("email", "").strip().lower()[:255]
+        code = request.form.get("code", "").strip()
+        limit_action("verify-code-email", email, 10, 900)
+        user = db.session.scalar(select(User).where(User.email == email))
+        saved = valid_verification_code(user, code)
+        if saved is None or user.auth_state is None or user.auth_state.email_verified_at is not None:
+            flash("The code is incorrect or has expired.", "error")
+        else:
+            user.auth_state.email_verified_at = utcnow()
+            db.session.delete(saved)
+            db.session.commit()
+            session.pop("verification_email", None)
+            flash("Email verified. You can log in now.", "success")
+            return redirect(url_for("site.login"))
+    return render_template("auth_action.html", mode="check", verification_email=email)
 
 
 @site.route("/resend-verification", methods=["GET", "POST"])
@@ -631,9 +649,10 @@ def resend_verification():
         if user and (not user.auth_state or not user.auth_state.email_verified_at):
             try:
                 send_account_email(user, "verify")
+                session["verification_email"] = user.email
             except requests.RequestException:
                 current_app.logger.exception("Verification email delivery failed")
-        flash("If this address needs verification, a new link has been sent.", "success")
+        flash("If this address needs verification, a new code has been sent.", "success")
         return redirect(url_for("site.check_email"))
     return render_template("auth_action.html", mode="resend")
 

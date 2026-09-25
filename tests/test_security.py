@@ -43,11 +43,13 @@ class AccountSecurityFlows(unittest.TestCase):
         })
 
     def verify(self):
-        link = re.search(r"https://tennisd\.example/verify-email/\S+", self.sent[-1][2]).group()
-        path = link.removeprefix("https://tennisd.example")
-        self.assertEqual(self.client.get(path).status_code, 200)
-        self.assertEqual(self.client.post(path, data={"csrf_token": self.token()}).status_code, 302)
-        return path
+        code = re.search(r"\b\d{6}\b", self.sent[-1][2]).group()
+        self.assertEqual(self.client.get("/check-email").status_code, 200)
+        response = self.client.post("/check-email", data={
+            "csrf_token": self.token(), "email": "alice@example.com", "code": code,
+        })
+        self.assertEqual(response.headers["Location"], "/login")
+        return code
 
     def test_email_verification_is_required_and_single_use(self):
         self.assertEqual(self.register().headers["Location"], "/check-email")
@@ -56,8 +58,11 @@ class AccountSecurityFlows(unittest.TestCase):
             "csrf_token": self.token(), "identity": "alice", "password": "long-test-password",
         })
         self.assertEqual(response.headers["Location"], "/check-email")
-        path = self.verify()
-        self.assertEqual(self.client.get(path).headers["Location"], "/resend-verification")
+        code = self.verify()
+        response = self.client.post("/check-email", data={
+            "csrf_token": self.token(), "email": "alice@example.com", "code": code,
+        }, follow_redirects=True)
+        self.assertIn(b"incorrect or has expired", response.data)
         response = self.client.post("/login", data={
             "csrf_token": self.token(), "identity": "alice", "password": "long-test-password",
         })
@@ -92,6 +97,25 @@ class AccountSecurityFlows(unittest.TestCase):
         self.assertEqual(self.client.post("/login", data={
             "csrf_token": self.token(), "identity": "alice", "password": "another-long-password",
         }).headers["Location"], "/me")
+
+    def test_resend_replaces_the_previous_verification_code(self):
+        self.register()
+        first_code = re.search(r"\b\d{6}\b", self.sent[-1][2]).group()
+        self.client.get("/resend-verification")
+        self.client.post("/resend-verification", data={
+            "csrf_token": self.token(), "email": "alice@example.com",
+        })
+        second_code = re.search(r"\b\d{6}\b", self.sent[-1][2]).group()
+        self.assertNotEqual(first_code, second_code)
+
+        rejected = self.client.post("/check-email", data={
+            "csrf_token": self.token(), "email": "alice@example.com", "code": first_code,
+        }, follow_redirects=True)
+        self.assertIn(b"incorrect or has expired", rejected.data)
+        accepted = self.client.post("/check-email", data={
+            "csrf_token": self.token(), "email": "alice@example.com", "code": second_code,
+        })
+        self.assertEqual(accepted.headers["Location"], "/login")
 
     def test_login_limit_and_security_headers(self):
         self.register()
