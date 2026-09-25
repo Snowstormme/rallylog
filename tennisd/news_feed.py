@@ -6,7 +6,7 @@ from html import unescape
 from html.parser import HTMLParser
 import json
 import re
-from urllib.parse import parse_qs, quote, quote_plus, urlparse
+from urllib.parse import parse_qs, quote, quote_plus, urljoin, urlparse
 from xml.etree import ElementTree
 
 import requests
@@ -18,6 +18,7 @@ NEWS_SOURCES = (
         "name": "ATP Tour",
         "url": "https://www.atptour.com/en/news",
         "domain": "atptour.com",
+        "image_domain": "atptour.com",
         "search": "site:atptour.com/en/news",
         "description": "Men's tour reports, interviews and tournament updates.",
     },
@@ -26,6 +27,7 @@ NEWS_SOURCES = (
         "name": "WTA",
         "url": "https://www.wtatennis.com/news",
         "domain": "wtatennis.com",
+        "image_domain": "photoresources.wtatennis.com",
         "search": "site:wtatennis.com/news",
         "description": "Women's tour news, match reactions and player stories.",
     },
@@ -34,6 +36,7 @@ NEWS_SOURCES = (
         "name": "ITF",
         "url": "https://www.itftennis.com/en/news-and-media/articles/",
         "domain": "itftennis.com",
+        "image_domain": "media.itftennis.com",
         "search": "site:itftennis.com/en/news-and-media/articles",
         "description": "Grand Slam, team competition and world tennis news.",
     },
@@ -42,6 +45,7 @@ NEWS_SOURCES = (
         "name": "Wimbledon",
         "url": "https://www.wimbledon.com/en_GB/news/index.html",
         "domain": "wimbledon.com",
+        "image_domain": "content.wimbledon.com",
         "search": "site:wimbledon.com/en_GB/news",
         "description": "Official Championships news and features.",
     },
@@ -50,6 +54,7 @@ NEWS_SOURCES = (
         "name": "BBC Sport",
         "url": "https://www.bbc.com/sport/tennis",
         "domain": "bbc.com",
+        "image_domain": "ichef.bbci.co.uk",
         "search": "site:bbc.com/sport/tennis",
         "description": "International tennis reporting, results and major tournament coverage.",
     },
@@ -58,6 +63,7 @@ NEWS_SOURCES = (
         "name": "ESPN Tennis",
         "url": "https://www.espn.com/tennis/",
         "domain": "espn.com",
+        "image_domain": "a3.espncdn.com",
         "search": "site:espn.com/tennis",
         "description": "Breaking tennis news, tournament reporting and player updates.",
     },
@@ -66,6 +72,7 @@ NEWS_SOURCES = (
         "name": "Sky Sports",
         "url": "https://www.skysports.com/tennis",
         "domain": "skysports.com",
+        "image_domain": "e0.365dm.com",
         "search": "site:skysports.com/tennis",
         "description": "Tour news, interviews and reporting from major tennis events.",
     },
@@ -74,6 +81,7 @@ NEWS_SOURCES = (
         "name": "Tennis365",
         "url": "https://www.tennis365.com/",
         "domain": "tennis365.com",
+        "image_domain": "d2me2qg8dfiw8u.cloudfront.net",
         "search": "site:tennis365.com",
         "description": "Daily tour reporting, analysis and player stories.",
     },
@@ -157,7 +165,7 @@ def fetch_news_items(source_key="all", now=None):
 
 def curate_news_items(
     stories, now=None, recent_hours=48, weekly_days=7, weekly_limit=28,
-    important_days=14, important_limit=6,
+    important_days=14, important_limit=6, minimum=0, fallback_days=365,
 ):
     """Keep all new headlines, a useful week view, and a few major older stories."""
     now = now or datetime.now(timezone.utc)
@@ -180,6 +188,23 @@ def curate_news_items(
         elif published_at >= important_cutoff and IMPORTANT_NEWS_RE.search(story.get("title", "")):
             important.append(story)
     selected = recent + weekly[:weekly_limit] + important[:important_limit]
+    selected_ids = {story.get("id") for story in selected}
+    selected_titles = {
+        re.sub(r"\W+", " ", story.get("title", "").lower()).strip() for story in selected
+    }
+    fallback_cutoff = now - timedelta(days=fallback_days)
+    for story in stories:
+        if len(selected) >= minimum:
+            break
+        published_at = story.get("published_at")
+        normalized_title = re.sub(r"\W+", " ", story.get("title", "").lower()).strip()
+        if (
+            published_at and fallback_cutoff <= published_at <= now + timedelta(hours=2)
+            and story.get("id") not in selected_ids and normalized_title not in selected_titles
+        ):
+            selected.append(story)
+            selected_ids.add(story.get("id"))
+            selected_titles.add(normalized_title)
     selected.sort(key=lambda story: story["published_at"], reverse=True)
     return selected
 
@@ -285,11 +310,15 @@ def fetch_news_article(source_key, article_id, google_url):
             total += len(paragraph)
             if len(paragraphs) == 3:
                 break
+        image = (
+            parser.meta.get("og:image") or parser.meta.get("twitter:image")
+            or parser.meta.get("twitter:image:src") or ""
+        )
         return {
             "original_url": original_url,
             "description": description[:500],
             "paragraphs": paragraphs,
-            "image": parser.meta.get("og:image", ""),
+            "image": urljoin(original_url, image) if image else "",
         }
     except (ValueError, requests.RequestException):
         return {"original_url": google_url, "description": "", "paragraphs": [], "image": ""}

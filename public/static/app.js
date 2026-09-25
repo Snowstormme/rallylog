@@ -1,4 +1,7 @@
 document.addEventListener("DOMContentLoaded", () => {
+  document.querySelectorAll("[data-news-card-image]").forEach((image) => {
+    image.addEventListener("error", () => image.remove());
+  });
   document.querySelectorAll("[data-password-toggle]").forEach((button) => {
     const input = document.getElementById(button.getAttribute("aria-controls"));
     if (!input) return;

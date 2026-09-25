@@ -372,7 +372,9 @@ def news():
     selected_source = request.args.get("source", "all").strip().lower()
     if selected_source not in source_keys:
         selected_source = "all"
-    all_stories = [] if current_app.config["TESTING"] else curate_news_items(fetch_news_items(selected_source))
+    all_stories = [] if current_app.config["TESTING"] else curate_news_items(
+        fetch_news_items(selected_source), minimum=8 if selected_source != "all" else 0,
+    )
     try:
         page = max(1, int(request.args.get("page", 1)))
     except (TypeError, ValueError):
@@ -402,7 +404,9 @@ def news_status():
     selected_source = request.args.get("source", "all").strip().lower()
     if selected_source not in source_keys:
         selected_source = "all"
-    stories = [] if current_app.config["TESTING"] else curate_news_items(fetch_news_items(selected_source))
+    stories = [] if current_app.config["TESTING"] else curate_news_items(
+        fetch_news_items(selected_source), minimum=8 if selected_source != "all" else 0,
+    )
     response = jsonify({
         "first_id": stories[0]["id"] if stories else None,
         "total": len(stories),
@@ -421,6 +425,38 @@ def news_story(source_key, story_id):
         abort(404)
     article = fetch_news_article(source_key, story_id, story["url"])
     return render_template("news_story.html", story=story, article=article)
+
+
+@site.get("/news/<source_key>/<story_id>/image")
+def news_image(source_key, story_id):
+    source = next((item for item in NEWS_SOURCES if item["key"] == source_key), None)
+    if source is None:
+        abort(404)
+    story = next((item for item in fetch_news_items(source_key) if item["id"] == story_id), None)
+    if story is None:
+        abort(404)
+    article = fetch_news_article(source_key, story_id, story["url"])
+    image_url = article.get("image", "") if article else ""
+    hostname = (urlsplit(image_url).hostname or "").lower()
+    allowed_domain = source["image_domain"]
+    if not image_url.startswith("https://") or not (
+        hostname == allowed_domain or hostname.endswith(f".{allowed_domain}")
+    ):
+        abort(404)
+    try:
+        upstream = requests.get(
+            image_url, headers={"Accept": "image/avif,image/webp,image/png,image/jpeg", "User-Agent": "Tennisd/1.0"},
+            timeout=8,
+        )
+        upstream.raise_for_status()
+    except requests.RequestException:
+        abort(404)
+    content_type = upstream.headers.get("Content-Type", "").split(";", 1)[0].lower()
+    if content_type not in {"image/avif", "image/jpeg", "image/png", "image/webp"} or len(upstream.content) > 5_000_000:
+        abort(404)
+    response = Response(upstream.content, mimetype=content_type)
+    response.headers["Cache-Control"] = "public, max-age=86400, stale-while-revalidate=604800"
+    return response
 
 
 @site.get("/notifications")

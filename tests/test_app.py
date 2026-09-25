@@ -134,6 +134,26 @@ class TennisdFlows(unittest.TestCase):
         self.assertIn(b"A short publisher preview", response.data)
         self.assertIn(b"Open on ATP Tour", response.data)
 
+    def test_news_image_proxy_only_serves_an_allowed_publisher_image(self):
+        story_id = "B" * 40
+        story = {
+            "id": story_id, "title": "A photographed final", "source": "ATP Tour",
+            "source_key": "atp", "url": f"https://news.google.com/rss/articles/{story_id}",
+            "published_at": datetime(2026, 9, 25, 12, 0, tzinfo=timezone.utc),
+        }
+        upstream = Mock()
+        upstream.raise_for_status.return_value = None
+        upstream.headers = {"Content-Type": "image/jpeg"}
+        upstream.content = b"safe-image-bytes"
+        with patch("tennisd.routes.fetch_news_items", return_value=[story]), patch(
+            "tennisd.routes.fetch_news_article",
+            return_value={"image": "https://www.atptour.com/-/media/example.jpg"},
+        ), patch("tennisd.routes.requests.get", return_value=upstream):
+            response = self.client.get(f"/news/atp/{story_id}/image")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.mimetype, "image/jpeg")
+        self.assertIn("max-age=86400", response.headers["Cache-Control"])
+
     def test_news_feed_does_not_apply_the_old_24_story_limit(self):
         published = datetime(2026, 9, 25, 12, 0, tzinfo=timezone.utc)
 
@@ -161,6 +181,9 @@ class TennisdFlows(unittest.TestCase):
             [story["id"] for story in selected],
             ["today", "yesterday", "old-routine", "old-major", "older-major"],
         )
+        filled = curate_news_items(stories, now=now, minimum=6)
+        self.assertEqual(len(filled), 6)
+        self.assertIn("older-routine", {story["id"] for story in filled})
 
     def test_friend_requests_and_notifications(self):
         self.register("alice")

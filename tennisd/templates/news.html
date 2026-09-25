@@ -14,7 +14,7 @@
     {% if featured_story %}<a class="news-featured news-story-{{ featured_story.source_key }}" href="{{ url_for('site.news_story', source_key=featured_story.source_key, story_id=featured_story.id) }}">
       <span class="news-featured-media">
         <span class="news-featured-court" aria-hidden="true"><i></i><b></b></span>
-        {% if featured_article and featured_article.image %}<img src="{{ featured_article.image }}" alt="" referrerpolicy="no-referrer">{% endif %}
+        {% if featured_article and featured_article.image %}<img src="{{ url_for('site.news_image', source_key=featured_story.source_key, story_id=featured_story.id) }}" alt="" data-news-card-image>{% endif %}
       </span>
       <span class="news-featured-copy">
         <span class="news-featured-meta"><b>{{ featured_story.source }}</b><time>{{ featured_story.published_at.strftime('%d %b %Y · %H:%M UTC') }}</time></span>
@@ -25,6 +25,7 @@
     </a>{% endif %}
     {% if stories %}<div class="news-feed">{% for story in feed_stories %}
       <a class="news-story news-story-{{ story.source_key }}" href="{{ url_for('site.news_story', source_key=story.source_key, story_id=story.id) }}">
+        <span class="news-story-media"><span class="news-card-court" aria-hidden="true"></span><img src="{{ url_for('site.news_image', source_key=story.source_key, story_id=story.id) }}" alt="" loading="lazy" data-news-card-image></span>
         <span class="news-story-source">{{ story.source }}</span>
         <span class="news-story-copy"><small>{{ story.published_at.strftime('%d %b %Y · %H:%M UTC') }}</small><strong>{{ story.title }}</strong></span>
       </a>
