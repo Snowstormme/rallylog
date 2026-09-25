@@ -3,9 +3,11 @@ import html
 import io
 import re
 import unicodedata
+from math import ceil
 from functools import lru_cache
 from datetime import date, datetime, timedelta, timezone
 from urllib.parse import quote, urlsplit
+from xml.sax.saxutils import escape as xml_escape
 
 import requests
 from flask import Blueprint, Response, abort, current_app, flash, jsonify, redirect, render_template, request, send_file, session, url_for
@@ -23,6 +25,7 @@ from .stats import community_statistics, diary_statistics, percent, player_stati
 from .tournament_catalog import tournament_level, tournament_profile, tournament_slug
 
 site = Blueprint("site", __name__)
+SITEMAP_PAGE_SIZE = 20_000
 
 TOURNAMENT_LOCATIONS = {
     "australian open": "Melbourne, Australia",
@@ -158,6 +161,127 @@ def safe_next(default="site.home"):
         target if target.startswith("/") and not target.startswith("//")
         and "\\" not in target and not parsed.scheme and not parsed.netloc
         else url_for(default)
+    )
+
+
+def public_url(path):
+    return f"{current_app.config['PUBLIC_BASE_URL'].rstrip('/')}{path}"
+
+
+def xml_response(body):
+    return Response(body, content_type="application/xml; charset=utf-8")
+
+
+@site.get("/google872d566cb03fdad0.html")
+def google_site_verification():
+    return Response(
+        "google-site-verification: google872d566cb03fdad0.html\n",
+        content_type="text/html; charset=utf-8",
+    )
+
+
+@site.get("/robots.txt")
+def robots_txt():
+    body = "\n".join((
+        "User-agent: *",
+        "Allow: /",
+        "Disallow: /settings",
+        "Disallow: /notifications",
+        "Disallow: /moderation",
+        "Disallow: /login",
+        "Disallow: /register",
+        f"Sitemap: {public_url('/sitemap.xml')}",
+        "",
+    ))
+    return Response(body, content_type="text/plain; charset=utf-8")
+
+
+@site.get("/sitemap.xml")
+def sitemap_index():
+    match_count = db.session.scalar(select(func.count(Match.id))) or 0
+    locations = [
+        public_url("/sitemap-core.xml"),
+        public_url("/sitemap-players.xml"),
+        public_url("/sitemap-tournaments.xml"),
+    ]
+    locations.extend(
+        public_url(f"/sitemap-matches-{page}.xml")
+        for page in range(1, ceil(match_count / SITEMAP_PAGE_SIZE) + 1)
+    )
+    entries = "".join(f"<sitemap><loc>{xml_escape(url)}</loc></sitemap>" for url in locations)
+    return xml_response(
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+        f"{entries}</sitemapindex>"
+    )
+
+
+@site.get("/sitemap-core.xml")
+def sitemap_core():
+    endpoints = (
+        "site.home", "site.matches", "site.players", "site.tournaments",
+        "site.news", "site.about", "site.privacy",
+    )
+    entries = "".join(
+        f"<url><loc>{xml_escape(public_url(url_for(endpoint)))}</loc></url>"
+        for endpoint in endpoints
+    )
+    return xml_response(
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+        f"{entries}</urlset>"
+    )
+
+
+@site.get("/sitemap-players.xml")
+def sitemap_players():
+    player_ids = db.session.scalars(select(Player.id).order_by(Player.id)).all()
+    entries = "".join(
+        f"<url><loc>{xml_escape(public_url(url_for('site.player_detail', player_id=player_id)))}</loc></url>"
+        for player_id in player_ids
+    )
+    return xml_response(
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+        f"{entries}</urlset>"
+    )
+
+
+@site.get("/sitemap-tournaments.xml")
+def sitemap_tournaments():
+    tournaments = db.session.execute(
+        select(Match.tour, Match.tournament).distinct().order_by(Match.tour, Match.tournament)
+    ).all()
+    entries = "".join(
+        f"<url><loc>{xml_escape(public_url(url_for('site.tournament_detail', tour=tour.lower(), slug=tournament_slug(name))))}</loc></url>"
+        for tour, name in tournaments
+    )
+    return xml_response(
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+        f"{entries}</urlset>"
+    )
+
+
+@site.get("/sitemap-matches-<int:page>.xml")
+def sitemap_matches(page):
+    if page < 1:
+        abort(404)
+    rows = db.session.execute(
+        select(Match.id, Match.week_start).order_by(Match.id)
+        .offset((page - 1) * SITEMAP_PAGE_SIZE).limit(SITEMAP_PAGE_SIZE)
+    ).all()
+    if not rows:
+        abort(404)
+    entries = "".join(
+        f"<url><loc>{xml_escape(public_url(url_for('site.match_detail', match_id=match_id)))}</loc>"
+        f"<lastmod>{week_start.isoformat()}</lastmod></url>"
+        for match_id, week_start in rows
+    )
+    return xml_response(
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+        f"{entries}</urlset>"
     )
 
 

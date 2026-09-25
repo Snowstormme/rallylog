@@ -118,6 +118,33 @@ class TennisdFlows(unittest.TestCase):
         news_status = self.client.get("/api/news-status?source=wta")
         self.assertEqual(news_status.json["total"], 0)
         self.assertEqual(news_status.headers["Cache-Control"], "no-store")
+
+    def test_search_engine_discovery_files(self):
+        verification = self.client.get("/google872d566cb03fdad0.html")
+        self.assertEqual(verification.status_code, 200)
+        self.assertIn(b"google-site-verification", verification.data)
+
+        robots = self.client.get("/robots.txt")
+        self.assertEqual(robots.status_code, 200)
+        self.assertIn(b"Sitemap: http://127.0.0.1:5000/sitemap.xml", robots.data)
+        self.assertIn(b"Disallow: /settings", robots.data)
+
+        sitemap = self.client.get("/sitemap.xml")
+        self.assertEqual(sitemap.status_code, 200)
+        self.assertIn(b"sitemap-core.xml", sitemap.data)
+        self.assertIn(b"sitemap-players.xml", sitemap.data)
+        self.assertIn(b"sitemap-tournaments.xml", sitemap.data)
+        self.assertIn(b"sitemap-matches-1.xml", sitemap.data)
+
+        self.assertIn(b"/matches/", self.client.get("/sitemap-matches-1.xml").data)
+        self.assertIn(b"/players/", self.client.get("/sitemap-players.xml").data)
+        self.assertIn(b"/tournaments/", self.client.get("/sitemap-tournaments.xml").data)
+
+        home = self.client.get("/")
+        self.assertIn(b'rel="canonical"', home.data)
+        self.assertIn(b'name="robots" content="index, follow', home.data)
+        self.assertIn(b'property="og:site_name" content="Tennisd"', home.data)
+        self.assertIn(b'name="robots" content="noindex, follow"', self.client.get("/login").data)
         with self.app.app_context():
             player_id = db.session.scalar(select(Player.id).limit(1))
         profile = self.client.get(f"/players/{player_id}")

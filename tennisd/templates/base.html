@@ -5,7 +5,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#10231f">
-  <meta name="description" content="Tennisd — your tennis match diary, player records and community reviews.">
+  <meta name="description" content="{% block meta_description %}Tennisd is a tennis match diary for discovering ATP and WTA matches, rating what you watched, and following players and tournaments.{% endblock %}">
+  <meta name="robots" content="{% block robots %}index, follow, max-image-preview:large{% endblock %}">
+  <link rel="canonical" href="{{ request.base_url }}">
+  <meta property="og:site_name" content="Tennisd">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="{% block social_title %}Tennisd · The tennis match diary{% endblock %}">
+  <meta property="og:description" content="Tennisd is a tennis match diary for discovering matches, keeping a diary, and sharing reviews.">
+  <meta property="og:url" content="{{ request.base_url }}">
+  <meta name="twitter:card" content="summary">
   <title>{% block title %}Tennisd{% endblock %} · The tennis match diary</title>
   <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
