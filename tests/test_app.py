@@ -190,6 +190,8 @@ class TennisdFlows(unittest.TestCase):
         watchlist = self.client.get("/u/alice?tab=watchlist")
         self.assertIn(b"Your watchlist", watchlist.data)
         self.assertIn(b'aria-current="page">Watchlist', watchlist.data)
+        self.assertNotIn(b">Watchlist <span>", watchlist.data)
+        self.assertIn(b'class="profile-section-total">1</small>', watchlist.data)
         response = self.client.post("/settings", data={
             "csrf_token": self.token(), "display_name": "Court Reader",
             "bio": "Grass-court fan",
