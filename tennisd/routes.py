@@ -16,7 +16,7 @@ from sqlalchemy.orm import aliased, joinedload
 
 from . import db
 from .models import AuthState, AuthToken, Comment, FollowedPlayer, Friendship, LiveMatch, Match, Player, ProfileImage, Report, Review, User, WatchlistItem, utcnow
-from .news_feed import NEWS_SOURCES, fetch_news_article, fetch_news_items
+from .news_feed import NEWS_SOURCES, curate_news_items, fetch_news_article, fetch_news_items
 from .prize_money import update_prize_money
 from .security import client_ip, limit_action, send_account_email, valid_token
 from .stats import community_statistics, diary_statistics, percent, player_statistics
@@ -372,7 +372,7 @@ def news():
     selected_source = request.args.get("source", "all").strip().lower()
     if selected_source not in source_keys:
         selected_source = "all"
-    all_stories = [] if current_app.config["TESTING"] else fetch_news_items(selected_source)
+    all_stories = [] if current_app.config["TESTING"] else curate_news_items(fetch_news_items(selected_source))
     try:
         page = max(1, int(request.args.get("page", 1)))
     except (TypeError, ValueError):
@@ -402,7 +402,7 @@ def news_status():
     selected_source = request.args.get("source", "all").strip().lower()
     if selected_source not in source_keys:
         selected_source = "all"
-    stories = [] if current_app.config["TESTING"] else fetch_news_items(selected_source)
+    stories = [] if current_app.config["TESTING"] else curate_news_items(fetch_news_items(selected_source))
     response = jsonify({
         "first_id": stories[0]["id"] if stories else None,
         "total": len(stories),

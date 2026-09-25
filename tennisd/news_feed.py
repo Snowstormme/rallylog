@@ -1,5 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from functools import lru_cache
 from html import unescape
@@ -46,6 +46,15 @@ NEWS_SOURCES = (
         "description": "Official Championships news and features.",
     },
 )
+
+IMPORTANT_NEWS_PATTERNS = (
+    r"\b(?:wins?|claims?|lifts?|secures?) (?:the )?title\b", r"\bcrowned champion\b",
+    r"\bworld no\.? ?1\b",
+    r"\bnew no\.? ?1\b", r"\bretires?\b", r"\bretirement\b", r"\binjur(?:y|ed)\b",
+    r"\bwithdraws?\b", r"\bpulls? out\b", r"\brecord\b", r"\bsuspend(?:ed|s|ion)\b",
+    r"\bbanned?\b", r"\bdoping\b",
+)
+IMPORTANT_NEWS_RE = re.compile("|".join(IMPORTANT_NEWS_PATTERNS), re.IGNORECASE)
 
 
 def _published_at(value):
@@ -108,6 +117,25 @@ def fetch_news_items(source_key="all", now=None):
     stories = [story for group in groups for story in group]
     stories.sort(key=lambda story: story["published_at"], reverse=True)
     return stories
+
+
+def curate_news_items(stories, now=None, recent_hours=36, important_days=7, important_limit=8):
+    """Keep every recent headline, plus a small set of meaningful older stories."""
+    now = now or datetime.now(timezone.utc)
+    recent_cutoff = now - timedelta(hours=recent_hours)
+    important_cutoff = now - timedelta(days=important_days)
+    recent, important = [], []
+    for story in stories:
+        published_at = story.get("published_at")
+        if not published_at or published_at > now + timedelta(hours=2):
+            continue
+        if published_at >= recent_cutoff:
+            recent.append(story)
+        elif published_at >= important_cutoff and IMPORTANT_NEWS_RE.search(story.get("title", "")):
+            important.append(story)
+    selected = recent + important[:important_limit]
+    selected.sort(key=lambda story: story["published_at"], reverse=True)
+    return selected
 
 
 def _google_article_url(article_id, source_url):
