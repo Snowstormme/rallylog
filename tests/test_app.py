@@ -72,6 +72,11 @@ class TennisdFlows(unittest.TestCase):
         players = self.client.get("/players")
         self.assertIn(b"player-photo-card", players.data)
         self.assertIn(b"/photo", players.data)
+        news = self.client.get("/news?source=wta")
+        self.assertIn(b"news-feed-section", news.data)
+        self.assertIn(b'aria-current="page">WTA</a>', news.data)
+        self.assertIn(b"Information sources", news.data)
+        self.assertLess(news.data.index(b"news-feed-section"), news.data.index(b"news-sources-section"))
         with self.app.app_context():
             player_id = db.session.scalar(select(Player.id).limit(1))
         profile = self.client.get(f"/players/{player_id}")

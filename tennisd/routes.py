@@ -16,6 +16,7 @@ from sqlalchemy.orm import aliased, joinedload
 
 from . import db
 from .models import AuthState, AuthToken, Comment, FollowedPlayer, Friendship, LiveMatch, Match, Player, ProfileImage, Report, Review, User, WatchlistItem, utcnow
+from .news_feed import NEWS_SOURCES, fetch_news_items
 from .prize_money import update_prize_money
 from .security import client_ip, limit_action, send_account_email, valid_token
 from .stats import community_statistics, diary_statistics, percent, player_statistics
@@ -367,13 +368,14 @@ def search():
 
 @site.get("/news")
 def news():
-    sources = [
-        {"name": "ATP Tour", "url": "https://www.atptour.com/en/news", "description": "Men's tour reports, interviews and tournament updates."},
-        {"name": "WTA", "url": "https://www.wtatennis.com/news", "description": "Women's tour news, match reactions and player stories."},
-        {"name": "ITF", "url": "https://www.itftennis.com/en/news-and-media/articles/", "description": "Grand Slam, team competition and world tennis news."},
-        {"name": "Wimbledon", "url": "https://www.wimbledon.com/en_GB/news/index.html", "description": "Official Championships news and features."},
-    ]
-    return render_template("news.html", sources=sources)
+    source_keys = {source["key"] for source in NEWS_SOURCES}
+    selected_source = request.args.get("source", "all").strip().lower()
+    if selected_source not in source_keys:
+        selected_source = "all"
+    stories = [] if current_app.config["TESTING"] else fetch_news_items(selected_source)
+    return render_template(
+        "news.html", sources=NEWS_SOURCES, stories=stories, selected_source=selected_source,
+    )
 
 
 @site.get("/notifications")
