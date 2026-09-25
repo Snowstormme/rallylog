@@ -143,7 +143,8 @@ def create_app(test_config=None):
             "default-src 'self'; script-src 'self'; "
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
             "font-src 'self' https://fonts.gstatic.com; "
-            "img-src 'self' data: https://commons.wikimedia.org https://upload.wikimedia.org https://thumb.wikimedia.org; "
+            "img-src 'self' data: https://commons.wikimedia.org https://upload.wikimedia.org https://thumb.wikimedia.org "
+            "https://www.atptour.com https://photoresources.wtatennis.com https://content.wimbledon.com; "
             "connect-src 'self'; form-action 'self'; base-uri 'self'; "
             "frame-ancestors 'none'; object-src 'none'"
         )

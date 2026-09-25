@@ -6,13 +6,24 @@
   <section class="news-feed-section"{% if page == 1 %} data-news-live data-news-source="{{ selected_source }}" data-news-first="{{ stories[0].id if stories else '' }}"{% endif %}>
     <div class="news-feed-head">
       <div><p class="eyebrow">THE FEED</p><h2>What is happening now<span>.</span></h2></div>
-      <div class="news-live-status"><i aria-hidden="true"></i><span data-news-count>{{ total_stories }} stories</span><small data-news-checked>Updates every minute</small></div>
     </div>
     <nav class="news-filters" aria-label="Filter news by source">
       <a href="{{ url_for('site.news') }}"{% if selected_source == 'all' %} aria-current="page"{% endif %}>All</a>
       {% for source in sources %}<a href="{{ url_for('site.news', source=source.key) }}"{% if selected_source == source.key %} aria-current="page"{% endif %}>{{ source.name }}</a>{% endfor %}
     </nav>
-    {% if stories %}<div class="news-feed">{% for story in stories %}
+    {% if featured_story %}<a class="news-featured news-story-{{ featured_story.source_key }}" href="{{ url_for('site.news_story', source_key=featured_story.source_key, story_id=featured_story.id) }}">
+      <span class="news-featured-media">
+        <span class="news-featured-court" aria-hidden="true"><i></i><b></b></span>
+        {% if featured_article and featured_article.image %}<img src="{{ featured_article.image }}" alt="" referrerpolicy="no-referrer">{% endif %}
+      </span>
+      <span class="news-featured-copy">
+        <span class="news-featured-meta"><b>{{ featured_story.source }}</b><time>{{ featured_story.published_at.strftime('%d %b %Y · %H:%M UTC') }}</time></span>
+        <strong>{{ featured_story.title }}</strong>
+        {% if featured_article and featured_article.description %}<p>{{ featured_article.description }}</p>{% endif %}
+        <em>Read on Tennisd</em>
+      </span>
+    </a>{% endif %}
+    {% if stories %}<div class="news-feed">{% for story in feed_stories %}
       <a class="news-story news-story-{{ story.source_key }}" href="{{ url_for('site.news_story', source_key=story.source_key, story_id=story.id) }}">
         <span class="news-story-source">{{ story.source }}</span>
         <span class="news-story-copy"><small>{{ story.published_at.strftime('%d %b %Y · %H:%M UTC') }}</small><strong>{{ story.title }}</strong></span>

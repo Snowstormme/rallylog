@@ -81,7 +81,8 @@ class TennisdFlows(unittest.TestCase):
         self.assertNotIn(b"news-story-arrow", news.data)
         self.assertNotIn("↗".encode(), news.data)
         self.assertIn(b"data-news-live", news.data)
-        self.assertIn(b"Updates every minute", news.data)
+        self.assertNotIn(b"Updates every minute", news.data)
+        self.assertNotIn(b"news-live-status", news.data)
         self.assertLess(news.data.index(b"news-feed-section"), news.data.index(b"news-sources-section"))
         with self.client.get("/static/app.js") as script:
             self.assertIn(b"/api/news-status", script.data)

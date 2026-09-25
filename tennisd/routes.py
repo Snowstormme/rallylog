@@ -382,8 +382,16 @@ def news():
     total_pages = max(1, (total_stories + page_size - 1) // page_size)
     page = min(page, total_pages)
     stories = all_stories[(page - 1) * page_size:page * page_size]
+    featured_story = stories[0] if page == 1 and stories else None
+    featured_article = None
+    if featured_story is not None:
+        featured_article = fetch_news_article(
+            featured_story["source_key"], featured_story["id"], featured_story["url"]
+        )
+    feed_stories = stories[1:] if featured_story is not None else stories
     return render_template(
-        "news.html", sources=NEWS_SOURCES, stories=stories, selected_source=selected_source,
+        "news.html", sources=NEWS_SOURCES, stories=stories, feed_stories=feed_stories,
+        featured_story=featured_story, featured_article=featured_article, selected_source=selected_source,
         total_stories=total_stories, page=page, total_pages=total_pages,
     )
 
