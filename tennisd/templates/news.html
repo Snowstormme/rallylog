@@ -3,10 +3,10 @@
 {% block content %}
 <section class="page-banner news-banner"><div class="container"><p class="eyebrow">AROUND THE TOURS</p><h1>Latest news<span>.</span></h1><p>A live reading list from the official tours and tournaments.</p></div></section>
 <main class="container news-page">
-  <section class="news-feed-section">
+  <section class="news-feed-section"{% if page == 1 %} data-news-live data-news-source="{{ selected_source }}" data-news-first="{{ stories[0].id if stories else '' }}"{% endif %}>
     <div class="news-feed-head">
       <div><p class="eyebrow">THE FEED</p><h2>What is happening now<span>.</span></h2></div>
-      <span>{{ stories|length }} stories</span>
+      <div class="news-live-status"><i aria-hidden="true"></i><span data-news-count>{{ total_stories }} stories</span><small data-news-checked>Updates every minute</small></div>
     </div>
     <nav class="news-filters" aria-label="Filter news by source">
       <a href="{{ url_for('site.news') }}"{% if selected_source == 'all' %} aria-current="page"{% endif %}>All</a>
@@ -18,6 +18,7 @@
         <span class="news-story-copy"><small>{{ story.published_at.strftime('%d %b %Y · %H:%M UTC') }}</small><strong>{{ story.title }}</strong></span>
       </a>
     {% endfor %}</div>{% else %}<div class="empty-state news-empty"><h3>The feed is taking a changeover.</h3><p>Open an official source below while the latest headlines reconnect.</p></div>{% endif %}
+    {% if total_pages > 1 %}<nav class="pagination news-pagination" aria-label="News pages">{% if page > 1 %}<a href="{{ url_for('site.news', source=selected_source if selected_source != 'all' else None, page=page - 1) }}">Previous</a>{% endif %}<span>Page {{ page }} / {{ total_pages }}</span>{% if page < total_pages %}<a href="{{ url_for('site.news', source=selected_source if selected_source != 'all' else None, page=page + 1) }}">Next</a>{% endif %}</nav>{% endif %}
   </section>
 
   <section class="news-sources-section">

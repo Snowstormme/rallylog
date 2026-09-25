@@ -8,6 +8,7 @@ from unittest.mock import Mock, patch
 from PIL import Image
 from tennisd import create_app, db
 from tennisd.models import Comment, FollowedPlayer, Match, Player, ProfileImage, Report, Review, User, WatchlistItem
+from tennisd.news_feed import fetch_news_items
 from tennisd.routes import normalized_person_name, wikimedia_player_photo
 from sqlalchemy import select
 
@@ -79,7 +80,14 @@ class TennisdFlows(unittest.TestCase):
         self.assertIn(b"Information sources", news.data)
         self.assertNotIn(b"news-story-arrow", news.data)
         self.assertNotIn("↗".encode(), news.data)
+        self.assertIn(b"data-news-live", news.data)
+        self.assertIn(b"Updates every minute", news.data)
         self.assertLess(news.data.index(b"news-feed-section"), news.data.index(b"news-sources-section"))
+        with self.client.get("/static/app.js") as script:
+            self.assertIn(b"/api/news-status", script.data)
+        news_status = self.client.get("/api/news-status?source=wta")
+        self.assertEqual(news_status.json["total"], 0)
+        self.assertEqual(news_status.headers["Cache-Control"], "no-store")
         with self.app.app_context():
             player_id = db.session.scalar(select(Player.id).limit(1))
         profile = self.client.get(f"/players/{player_id}")
@@ -124,6 +132,16 @@ class TennisdFlows(unittest.TestCase):
         self.assertIn(b"A final to remember", response.data)
         self.assertIn(b"A short publisher preview", response.data)
         self.assertIn(b"Open on ATP Tour", response.data)
+
+    def test_news_feed_does_not_apply_the_old_24_story_limit(self):
+        published = datetime(2026, 9, 25, 12, 0, tzinfo=timezone.utc)
+
+        def source_items(source_key, _cache_window):
+            return [{"id": f"{source_key}-{index}", "published_at": published} for index in range(40)]
+
+        with patch("tennisd.news_feed._source_items", side_effect=source_items):
+            stories = fetch_news_items("all", now=published)
+        self.assertEqual(len(stories), 160)
 
     def test_friend_requests_and_notifications(self):
         self.register("alice")

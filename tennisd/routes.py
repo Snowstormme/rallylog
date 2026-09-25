@@ -372,10 +372,36 @@ def news():
     selected_source = request.args.get("source", "all").strip().lower()
     if selected_source not in source_keys:
         selected_source = "all"
-    stories = [] if current_app.config["TESTING"] else fetch_news_items(selected_source)
+    all_stories = [] if current_app.config["TESTING"] else fetch_news_items(selected_source)
+    try:
+        page = max(1, int(request.args.get("page", 1)))
+    except (TypeError, ValueError):
+        page = 1
+    page_size = 30
+    total_stories = len(all_stories)
+    total_pages = max(1, (total_stories + page_size - 1) // page_size)
+    page = min(page, total_pages)
+    stories = all_stories[(page - 1) * page_size:page * page_size]
     return render_template(
         "news.html", sources=NEWS_SOURCES, stories=stories, selected_source=selected_source,
+        total_stories=total_stories, page=page, total_pages=total_pages,
     )
+
+
+@site.get("/api/news-status")
+def news_status():
+    source_keys = {source["key"] for source in NEWS_SOURCES}
+    selected_source = request.args.get("source", "all").strip().lower()
+    if selected_source not in source_keys:
+        selected_source = "all"
+    stories = [] if current_app.config["TESTING"] else fetch_news_items(selected_source)
+    response = jsonify({
+        "first_id": stories[0]["id"] if stories else None,
+        "total": len(stories),
+        "checked_at": datetime.now(timezone.utc).isoformat(),
+    })
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @site.get("/news/<source_key>/<story_id>")

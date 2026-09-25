@@ -56,7 +56,7 @@ def _published_at(value):
         return datetime.min.replace(tzinfo=timezone.utc)
 
 
-@lru_cache(maxsize=32)
+@lru_cache(maxsize=64)
 def _source_items(source_key, cache_window):
     source = next(item for item in NEWS_SOURCES if item["key"] == source_key)
     query = quote_plus(source["search"])
@@ -68,7 +68,7 @@ def _source_items(source_key, cache_window):
     response.raise_for_status()
     root = ElementTree.fromstring(response.content)
     stories = []
-    for item in root.findall(".//item")[:8]:
+    for item in root.findall(".//item"):
         title = (item.findtext("title") or "").strip()
         publisher = (item.findtext("source") or "").strip()
         for publisher_name in (publisher, source["name"]):
@@ -94,7 +94,7 @@ def _source_items(source_key, cache_window):
 def fetch_news_items(source_key="all", now=None):
     """Load official publisher headlines through Google News RSS for discovery."""
     now = now or datetime.now(timezone.utc)
-    cache_window = int(now.timestamp() // 900)
+    cache_window = int(now.timestamp() // 60)
     keys = [source_key] if source_key != "all" else [source["key"] for source in NEWS_SOURCES]
 
     def load(key):
@@ -107,7 +107,7 @@ def fetch_news_items(source_key="all", now=None):
         groups = executor.map(load, keys)
     stories = [story for group in groups for story in group]
     stories.sort(key=lambda story: story["published_at"], reverse=True)
-    return stories[:24]
+    return stories
 
 
 def _google_article_url(article_id, source_url):

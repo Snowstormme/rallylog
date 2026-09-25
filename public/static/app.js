@@ -67,4 +67,29 @@ document.addEventListener("DOMContentLoaded", () => {
     window.setInterval(refreshScores, 60000);
   }
 
+  const liveNews = document.querySelector("[data-news-live]");
+  if (liveNews) {
+    let firstStory = liveNews.dataset.newsFirst;
+    const source = liveNews.dataset.newsSource || "all";
+    const count = liveNews.querySelector("[data-news-count]");
+    const checked = liveNews.querySelector("[data-news-checked]");
+    const refreshNews = async () => {
+      try {
+        const response = await fetch(`/api/news-status?source=${encodeURIComponent(source)}`, { cache: "no-store" });
+        if (!response.ok) return;
+        const payload = await response.json();
+        if (count) count.textContent = `${payload.total} stories`;
+        if (checked) checked.textContent = "Checked just now";
+        if (firstStory && payload.first_id && payload.first_id !== firstStory) {
+          window.location.reload();
+          return;
+        }
+        firstStory = payload.first_id || firstStory;
+      } catch (_) {
+        if (checked) checked.textContent = "Live update paused";
+      }
+    };
+    window.setInterval(refreshNews, 60000);
+  }
+
 });
