@@ -64,7 +64,13 @@ def player_from_row(tour, source_id, name, row, bio=None, cache=None):
 
 
 def import_rows(tour, rows, bios=None):
-    existing = set(db.session.scalars(select(Match.id)).all())
+    candidate_ids = [
+        f"{tour.lower()}-{row.get('tourney_id')}-{row.get('match_num')}"
+        for row in rows if row.get("tourney_id") and row.get("match_num")
+    ]
+    existing = set(
+        db.session.scalars(select(Match.id).where(Match.id.in_(candidate_ids))).all()
+    ) if candidate_ids else set()
     added = 0
     bios = bios or {}
     players = {}

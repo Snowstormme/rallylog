@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 {% block title %}Tournaments{% endblock %}
 {% block content %}
-<section class="page-banner"><div class="container"><p class="eyebrow">THE TROPHY ROOM</p><h1>Tournaments<span>.</span></h1><p>Explore events across both tours and open every match stored in the archive.</p></div></section>
+<section class="page-banner"><div class="container"><p class="eyebrow">THE TROPHY ROOM</p><h1>Tournaments<span>.</span></h1><p>Explore Grand Slams, ATP and WTA 1000 and 500 events, and every other tournament stored across both tours.</p></div></section>
 <div class="container page-section"><div class="tournament-grid">{% for item in tournaments %}<a class="tournament-card" href="{{ url_for('site.matches', q=item.tournament) }}"><span class="trophy-mark" aria-hidden="true"></span><small>{{ item.tour }} · {{ item.surface }} · {{ item.latest.year }}</small><strong>{{ item.tournament }}</strong><span>{{ item.matches }} matches</span></a>{% endfor %}</div></div>
 {% endblock %}

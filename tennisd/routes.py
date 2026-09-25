@@ -152,7 +152,7 @@ def safe_next(default="site.home"):
 @site.get("/")
 def home():
     recent_matches = db.session.scalars(
-        select(Match).where(Match.level == "G", Match.round == "F")
+        select(Match).where(Match.level.in_(("G", "M", "PM", "P", "A", "I")), Match.round == "F")
         .options(joinedload(Match.winner), joinedload(Match.loser))
         .order_by(Match.week_start.desc(), Match.tour).limit(8)
     ).all()

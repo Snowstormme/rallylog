@@ -1,4 +1,4 @@
-"""Import the free current Grand Slam slate from Live Tennis API."""
+"""Import the free current top-tier slate from Live Tennis API."""
 
 import os
 from datetime import datetime, timedelta, timezone
@@ -18,6 +18,13 @@ GRAND_SLAMS = {
     "us open": "US Open",
     "u.s. open": "US Open",
 }
+FEATURED_TIERS = (
+    "grand_slam",
+    "atp_1000",
+    "atp_500",
+    "wta_1000",
+    "wta_500",
+)
 
 
 def parse_instant(value):
@@ -58,9 +65,12 @@ def display_score(score):
 
 def normalize_match(item, now=None):
     now = now or datetime.now(timezone.utc)
-    tournament = slam_name(item.get("tournament"))
+    tier = str(item.get("tier") or "").lower()
+    tournament = slam_name(item.get("tournament")) or str(item.get("tournament") or "").strip()
     tour = str(item.get("tour") or "").upper()
-    if not tournament or tour not in ("ATP", "WTA"):
+    if not tournament or len(tournament) > 160 or tier not in FEATURED_TIERS or tour not in ("ATP", "WTA"):
+        return None
+    if (tier.startswith("atp_") and tour != "ATP") or (tier.startswith("wta_") and tour != "WTA"):
         return None
     if item.get("draw") != "singles" or item.get("is_doubles") is True:
         return None
@@ -99,15 +109,31 @@ def fetch_matches(status, session=requests):
     key = os.environ.get("LIVETENNISAPI_KEY", "").strip()
     if not key:
         raise RuntimeError("LIVETENNISAPI_KEY is not configured.")
-    response = session.get(
-        f"{API_ROOT}/matches",
-        params={"status": status, "tier": "grand_slam", "draw": "singles", "limit": 100},
-        headers={"Authorization": f"Bearer {key}", "User-Agent": "Tennisd/1.0"},
-        timeout=20,
-    )
-    response.raise_for_status()
-    payload = response.json()
-    return payload.get("data", []) if isinstance(payload, dict) else []
+    matches = []
+    offset = 0
+    while offset < 1000:
+        response = session.get(
+            f"{API_ROOT}/matches",
+            params={
+                "status": status,
+                "tier": ",".join(FEATURED_TIERS),
+                "draw": "singles",
+                "limit": 100,
+                "offset": offset,
+            },
+            headers={"X-API-Key": key, "User-Agent": "Tennisd/1.0"},
+            timeout=20,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        page = payload.get("data", []) if isinstance(payload, dict) else []
+        if not isinstance(page, list):
+            break
+        matches.extend(page)
+        if len(page) < 100:
+            break
+        offset += len(page)
+    return matches
 
 
 def sync_matches(status, session=requests, now=None):

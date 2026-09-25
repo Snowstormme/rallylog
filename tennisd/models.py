@@ -126,7 +126,7 @@ class Match(db.Model):
 
 
 class LiveMatch(db.Model):
-    """Current Grand Slam fixture mirrored from the live provider."""
+    """Current Grand Slam, 1000 or 500 fixture mirrored from the live provider."""
 
     provider_id = db.Column(db.String(64), primary_key=True)
     status = db.Column(db.String(12), nullable=False, index=True)

@@ -24,7 +24,7 @@ That command downloads ATP and WTA CSV files from the [Sackmann archive](https:/
 ## What is here
 
 - **Discover:** featured match, archive highlights and recent public reviews.
-- **Matches:** Grand Slam live scores and the next seven days of ATP/WTA singles, plus historical search by player, tournament, tour, surface, level and year.
+- **Matches:** Grand Slam, ATP/WTA 1000 and ATP/WTA 500 live scores and the next seven days of singles, plus historical search by player, tournament, tour, surface, level and year.
 - **Match page:** score, recorded serve statistics, community rating, reviews and comments.
 - **Diary:** one editable entry per user and match with viewing date, optional half-star rating, review, favorite, spoiler flag and public/private choice.
 - **Watchlist:** save matches to watch later; logging a match removes it from the watchlist.
@@ -65,9 +65,11 @@ Tennisd can run as one Flask function on Vercel Hobby with automatic HTTPS and r
 5. Import the Git repository into a Vercel Hobby project. Set `APP_ENV=production`, `REGISTRATION_ENABLED=false`, a random 64-character `SECRET_KEY`, and `DATABASE_URL`. Vercel detects `wsgi.py` as the Flask entry point and supplies its hostname to the app.
 6. Verify `/healthz`, the catalog, account email, login, password reset, reports, export and account deletion. Then change `REGISTRATION_ENABLED` to `true` and redeploy.
 
-### Live Grand Slam feed
+### Live top-tier feed
 
-Tennisd mirrors only ATP and WTA singles at the Australian Open, Roland Garros, Wimbledon and US Open. Create a free Live Tennis API key, add it to GitHub as `LIVETENNISAPI_KEY`, and add the limited `rallylog_web` pooled TLS connection as `TENNISD_SYNC_DATABASE_URL`. Run `scripts/add_live_matches.sql` once as the database owner, then enable the **Sync live Grand Slam matches** workflow. It refreshes the stored live slate every 15 minutes and replaces those cards' score text in open browsers once a minute. One midnight UTC hour refreshes fixtures for the next seven days instead, keeping the workflow within the free request allowance.
+Tennisd mirrors ATP and WTA singles at Grand Slams and ATP/WTA 1000 and 500 events. Create a free Live Tennis API key, add it to GitHub as `LIVETENNISAPI_KEY`, and add the limited `rallylog_web` pooled TLS connection as `TENNISD_SYNC_DATABASE_URL`. Run `scripts/add_live_matches.sql` once as the database owner, then enable the **Sync live top-tier matches** workflow. It refreshes the stored live slate every 15 minutes and replaces those cards' score text in open browsers once a minute. One midnight UTC hour refreshes fixtures for the next seven days instead, keeping the scheduled use inside the free plan's 100 request daily allowance.
+
+The **Import match history since 2010** workflow imports the attributed ATP and WTA results archive into the production database. It is safe to rerun because existing match IDs are skipped. The free Live Tennis API plan does not include unrestricted completed-match history, so future finished matches cannot be copied automatically into the permanent diary catalog from that API without its BASIC plan. Live and upcoming cards still update automatically on the free plan.
 
 This is near-live on the free plan rather than point-by-point streaming. The API key is used only by GitHub Actions and must not be placed in Vercel or sent to the browser.
 

@@ -74,7 +74,7 @@ class LiveTennisTests(unittest.TestCase):
             db.engine.dispose()
         self.temporary.cleanup()
 
-    def test_score_and_grand_slam_filtering(self):
+    def test_score_and_featured_tier_filtering(self):
         now = datetime(2026, 7, 8, 13, tzinfo=timezone.utc)
         row = fixture(starts_at=now)
         self.assertEqual(display_score(row["score"]), "6–4 3–6 2–1 (30–15)")
@@ -82,6 +82,9 @@ class LiveTennisTests(unittest.TestCase):
         self.assertEqual(normalized["tournament"], "Wimbledon")
         self.assertEqual(normalized["tour"], "WTA")
         row["tournament"] = "Berlin Open"
+        row["tier"] = "wta_500"
+        self.assertEqual(normalize_match(row, now)["tournament"], "Berlin Open")
+        row["tier"] = "wta_250"
         self.assertIsNone(normalize_match(row, now))
 
     def test_upcoming_window_and_sync(self):
@@ -95,7 +98,10 @@ class LiveTennisTests(unittest.TestCase):
             match = db.session.get(LiveMatch, "91234")
             self.assertEqual(match.player1_name, "Iga Swiatek")
             self.assertEqual(match.surface, "Grass")
-        self.assertEqual(session.calls[0][1]["params"]["tier"], "grand_slam")
+        self.assertEqual(
+            session.calls[0][1]["params"]["tier"],
+            "grand_slam,atp_1000,atp_500,wta_1000,wta_500",
+        )
         self.assertEqual(session.calls[0][1]["params"]["draw"], "singles")
 
     def test_matches_page_and_internal_score_endpoint(self):
