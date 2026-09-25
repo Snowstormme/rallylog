@@ -15,12 +15,12 @@ from sqlalchemy import delete, func, inspect, or_, select
 from sqlalchemy.orm import aliased, joinedload
 
 from . import db
-from .models import AuthState, AuthToken, Comment, FollowedPlayer, Friendship, LiveMatch, Match, Player, ProfileImage, Report, Review, User, WatchlistItem, utcnow
+from .models import AuthState, AuthToken, Comment, FollowedPlayer, Friendship, LiveMatch, Match, Player, ProfileImage, Report, Review, TournamentSubscription, User, WatchlistItem, utcnow
 from .news_feed import NEWS_SOURCES, curate_news_items, fetch_news_article, fetch_news_items
 from .prize_money import update_prize_money
 from .security import client_ip, limit_action, send_account_email, valid_token, valid_verification_code
 from .stats import community_statistics, diary_statistics, percent, player_statistics
-from .tournament_catalog import tournament_profile, tournament_slug
+from .tournament_catalog import tournament_level, tournament_profile, tournament_slug
 
 site = Blueprint("site", __name__)
 
@@ -34,6 +34,16 @@ TOURNAMENT_LOCATIONS = {
 
 def match_location(match):
     return TOURNAMENT_LOCATIONS.get(match.tournament.lower(), "Location unavailable")
+
+
+def resolve_tournament_name(tour, slug):
+    tour = tour.upper()
+    if tour not in ("ATP", "WTA"):
+        return None
+    names = db.session.scalars(
+        select(Match.tournament).where(Match.tour == tour).distinct()
+    ).all()
+    return next((name for name in names if tournament_slug(name) == slug), None)
 
 
 def current_match_rows(status):
@@ -377,11 +387,35 @@ def tournaments():
         item["surfaces"].add(row.surface)
         item["levels"].add(row.level)
     tournament_rows = list(grouped.values())
-    options = db.session.execute(
-        select(Match.tournament, Match.tour).distinct().order_by(Match.tournament, Match.tour)
+    for item in tournament_rows:
+        priority, value_label, value_group = tournament_level(item["levels"])
+        item.update({
+            "priority": priority, "value_label": value_label, "value_group": value_group,
+            "profile": tournament_profile(item["tournament"]),
+        })
+    tournament_rows.sort(key=lambda item: (
+        item["priority"], -item["latest"].toordinal(), item["tournament"], item["tour"],
+    ))
+    option_rows = db.session.execute(
+        select(Match.tournament, Match.tour, Match.level).distinct()
     ).all()
+    option_groups = {}
+    for option in option_rows:
+        option_groups.setdefault((option.tour, option.tournament), set()).add(option.level)
+    options = []
+    for (option_tour, option_name), option_levels in option_groups.items():
+        priority, value_label, _ = tournament_level(option_levels)
+        options.append({
+            "tour": option_tour, "tournament": option_name,
+            "slug": tournament_slug(option_name), "priority": priority,
+            "value_label": value_label,
+        })
+    options.sort(key=lambda item: (item["priority"], item["tournament"], item["tour"]))
+    filtered = bool(query or tour or surface or level)
+    featured = [] if filtered else [item for item in tournament_rows if item["priority"] == 0]
+    remaining = tournament_rows if filtered else [item for item in tournament_rows if item["priority"] != 0]
     return render_template(
-        "tournaments.html", tournaments=tournament_rows, options=options,
+        "tournaments.html", tournaments=remaining, featured=featured, options=options,
         query=query, tour=tour, surface=surface, level=level,
         tournament_slug=tournament_slug,
     )
@@ -390,12 +424,7 @@ def tournaments():
 @site.get("/tournaments/<tour>/<slug>")
 def tournament_detail(tour, slug):
     tour = tour.upper()
-    if tour not in ("ATP", "WTA"):
-        abort(404)
-    names = db.session.scalars(
-        select(Match.tournament).where(Match.tour == tour).distinct()
-    ).all()
-    tournament_name = next((name for name in names if tournament_slug(name) == slug), None)
+    tournament_name = resolve_tournament_name(tour, slug)
     if tournament_name is None:
         abort(404)
     condition = (Match.tour == tour, Match.tournament == tournament_name)
@@ -430,6 +459,21 @@ def tournament_detail(tour, slug):
     levels = db.session.scalars(
         select(Match.level).where(*condition).distinct().order_by(Match.level)
     ).all()
+    _, value_label, value_group = tournament_level(levels)
+    subscriptions_ready = inspect(db.engine).has_table(TournamentSubscription.__tablename__)
+    subscribed = False
+    subscriber_count = 0
+    if subscriptions_ready:
+        subscriber_count = db.session.scalar(select(func.count(TournamentSubscription.id)).where(
+            TournamentSubscription.tour == tour,
+            TournamentSubscription.tournament == tournament_name,
+        ))
+        if current_user.is_authenticated:
+            subscribed = db.session.scalar(select(TournamentSubscription.id).where(
+                TournamentSubscription.user_id == current_user.id,
+                TournamentSubscription.tour == tour,
+                TournamentSubscription.tournament == tournament_name,
+            )) is not None
     live_matches = [
         match for match in current_match_rows("live") + current_match_rows("upcoming")
         if match.tour == tour and match.tournament.casefold() == tournament_name.casefold()
@@ -439,8 +483,37 @@ def tournament_detail(tour, slug):
         profile=tournament_profile(tournament_name), matches=match_rows,
         total_matches=total_matches, total_finals=len(finals), finals=finals[:12],
         champions=champions, years=years, surfaces=surfaces,
-        levels=levels, live_matches=live_matches, match_location=match_location,
+        levels=levels, value_label=value_label, value_group=value_group,
+        live_matches=live_matches, match_location=match_location,
+        subscriptions_ready=subscriptions_ready, subscribed=subscribed,
+        subscriber_count=subscriber_count,
     )
+
+
+@site.post("/tournaments/<tour>/<slug>/subscribe")
+@login_required
+def toggle_tournament_subscription(tour, slug):
+    if not inspect(db.engine).has_table(TournamentSubscription.__tablename__):
+        abort(503)
+    tour = tour.upper()
+    tournament_name = resolve_tournament_name(tour, slug)
+    if tournament_name is None:
+        abort(404)
+    subscription = db.session.scalar(select(TournamentSubscription).where(
+        TournamentSubscription.user_id == current_user.id,
+        TournamentSubscription.tour == tour,
+        TournamentSubscription.tournament == tournament_name,
+    ))
+    if subscription:
+        db.session.delete(subscription)
+        flash(f"You stopped following {tournament_name}.", "success")
+    else:
+        db.session.add(TournamentSubscription(
+            user_id=current_user.id, tour=tour, tournament=tournament_name,
+        ))
+        flash(f"You are now following {tournament_name}.", "success")
+    db.session.commit()
+    return redirect(url_for("site.tournament_detail", tour=tour.lower(), slug=slug))
 
 
 @site.get("/search")
@@ -852,6 +925,7 @@ def profile(username):
         .order_by(Review.watched_on.desc(), Review.id.desc())
     ).all()
     followed = []
+    tournament_subscriptions = []
     watchlist = []
     friends = []
     friend_state = None
@@ -865,6 +939,11 @@ def profile(username):
             .options(joinedload(WatchlistItem.match))
             .order_by(WatchlistItem.added_at.desc())
         ).all()
+        if inspect(db.engine).has_table(TournamentSubscription.__tablename__):
+            tournament_subscriptions = db.session.scalars(
+                select(TournamentSubscription).where(TournamentSubscription.user_id == user.id)
+                .order_by(TournamentSubscription.created_at.desc())
+            ).all()
         connections = db.session.scalars(select(Friendship).where(
             or_(Friendship.requester_id == user.id, Friendship.addressee_id == user.id),
             Friendship.status == "accepted",
@@ -880,6 +959,7 @@ def profile(username):
         "profile.html", user=user, reviews=reviews,
         stats=diary_statistics(reviews), own=own, followed=followed, watchlist=watchlist,
         favorites=favorites, active_tab=active_tab, friends=friends, friend_state=friend_state,
+        tournament_subscriptions=tournament_subscriptions, tournament_slug=tournament_slug,
     )
 
 
@@ -950,6 +1030,12 @@ def export_diary():
     watchlist = db.session.scalars(
         select(WatchlistItem).where(WatchlistItem.user_id == current_user.id)
     ).all()
+    tournament_subscriptions = []
+    if inspect(db.engine).has_table(TournamentSubscription.__tablename__):
+        tournament_subscriptions = db.session.scalars(
+            select(TournamentSubscription).where(TournamentSubscription.user_id == current_user.id)
+            .order_by(TournamentSubscription.created_at)
+        ).all()
     comments = db.session.scalars(
         select(Comment).where(Comment.user_id == current_user.id)
         .options(joinedload(Comment.review))
@@ -977,6 +1063,10 @@ def export_diary():
             for review in reviews
         ],
         "followed_players": [item.player.name for item in follows],
+        "followed_tournaments": [
+            {"tour": item.tour, "tournament": item.tournament}
+            for item in tournament_subscriptions
+        ],
         "watchlist_match_ids": [item.match_id for item in watchlist],
         "comments": [
             {
@@ -1010,6 +1100,8 @@ def delete_account():
     )))
     db.session.execute(delete(Comment).where(Comment.user_id == user.id))
     db.session.execute(delete(FollowedPlayer).where(FollowedPlayer.user_id == user.id))
+    if inspect(db.engine).has_table(TournamentSubscription.__tablename__):
+        db.session.execute(delete(TournamentSubscription).where(TournamentSubscription.user_id == user.id))
     db.session.execute(delete(WatchlistItem).where(WatchlistItem.user_id == user.id))
     db.session.delete(user)
     db.session.commit()

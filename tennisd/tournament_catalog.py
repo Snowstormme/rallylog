@@ -75,6 +75,24 @@ TOURNAMENT_PROFILES = {
 }
 
 
+LEVEL_DETAILS = {
+    "G": (0, "Grand Slam", "Major"),
+    "F": (1, "Tour Finals", "Season finale"),
+    "M": (2, "Masters 1000", "1000 level"),
+    "PM": (2, "WTA 1000", "1000 level"),
+    "P": (3, "WTA Premier", "Premier level"),
+    "A": (4, "ATP Tour", "Tour level"),
+    "I": (4, "WTA International", "Tour level"),
+    "O": (1, "Olympic Games", "Global event"),
+    "D": (3, "Team event", "Team competition"),
+}
+
+
+def tournament_level(levels):
+    details = [LEVEL_DETAILS[level] for level in levels if level in LEVEL_DETAILS]
+    return min(details, default=(9, "Tour event", "Tour event"), key=lambda item: item[0])
+
+
 def tournament_profile(name):
     profile = dict(GENERIC_TROPHY)
     profile.update(TOURNAMENT_PROFILES.get(name.casefold(), {}))

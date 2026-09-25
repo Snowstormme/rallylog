@@ -51,6 +51,32 @@ document.addEventListener("DOMContentLoaded", () => {
     start();
   });
 
+  document.querySelectorAll("[data-tournament-theme-root]").forEach((page) => {
+    const buttons = Array.from(page.querySelectorAll("[data-tournament-theme]"));
+    const themes = new Set(["court", "classic", "trophy"]);
+    let theme = "court";
+    try {
+      const saved = window.localStorage.getItem("tennisd-tournament-theme");
+      if (themes.has(saved)) theme = saved;
+    } catch (_) {
+      // The court design remains the default when storage is unavailable.
+    }
+    const applyTheme = (next) => {
+      theme = themes.has(next) ? next : "court";
+      page.dataset.tournamentTheme = theme;
+      buttons.forEach((button) => {
+        button.setAttribute("aria-pressed", String(button.dataset.tournamentTheme === theme));
+      });
+      try {
+        window.localStorage.setItem("tennisd-tournament-theme", theme);
+      } catch (_) {}
+    };
+    buttons.forEach((button) => button.addEventListener("click", () => {
+      applyTheme(button.dataset.tournamentTheme);
+    }));
+    applyTheme(theme);
+  });
+
   const liveSlate = document.querySelector("[data-live-slate]");
   if (liveSlate) {
     const refreshScores = async () => {

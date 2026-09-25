@@ -203,6 +203,18 @@ class FollowedPlayer(db.Model):
     player = db.relationship("Player")
 
 
+class TournamentSubscription(db.Model):
+    __table_args__ = (
+        UniqueConstraint("user_id", "tour", "tournament", name="uq_user_tournament_subscription"),
+        CheckConstraint("tour IN ('ATP', 'WTA')", name="valid_subscription_tour"),
+    )
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id", ondelete="CASCADE"), nullable=False, index=True)
+    tour = db.Column(db.String(3), nullable=False, index=True)
+    tournament = db.Column(db.String(120), nullable=False, index=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+
+
 class WatchlistItem(db.Model):
     __table_args__ = (UniqueConstraint("user_id", "match_id", name="uq_user_match_watchlist"),)
     id = db.Column(db.Integer, primary_key=True)

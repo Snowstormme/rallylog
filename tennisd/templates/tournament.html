@@ -2,23 +2,31 @@
 {% from '_macros.html' import archive_match_card, current_match_card %}
 {% block title %}{{ tournament }} · {{ tour }}{% endblock %}
 {% block content %}
-<section class="tournament-hero">
-  <img src="{{ profile.image_url }}" alt="Trophy associated with {{ tournament }}" referrerpolicy="no-referrer">
-  <span class="tournament-hero-shade" aria-hidden="true"></span>
-  <div class="container tournament-hero-content"><a class="back-link" href="{{ url_for('site.tournaments') }}">ALL TOURNAMENTS</a><p class="eyebrow">{{ tour }} · {{ surfaces|join(' / ') }}</p><h1>{{ tournament }}<span>.</span></h1><p>{{ profile.summary }}</p><div class="tournament-hero-meta"><span>{{ profile.location }}</span>{% if profile.founded %}<span>Founded {{ profile.founded }}</span>{% endif %}<span>{{ years|length }} seasons in Tennisd</span></div><small>Image: <a href="{{ profile.image_page }}" target="_blank" rel="noopener noreferrer">{{ profile.image_credit }}</a></small></div>
-</section>
-<div class="container tournament-detail">
-  <section class="tournament-facts" aria-label="Tournament archive overview"><article><strong>{{ '{:,}'.format(total_matches) }}</strong><span>matches</span></article><article><strong>{{ years[-1] if years else '—' }}—{{ years[0] if years else '—' }}</strong><span>catalog span</span></article><article><strong>{{ surfaces|join(' / ') }}</strong><span>surfaces</span></article><article><strong>{{ total_finals }}</strong><span>finals</span></article></section>
-  {% if live_matches %}<section class="page-section compact"><div class="section-head"><div><p class="eyebrow">ON TOUR NOW</p><h2>Live & upcoming<span>.</span></h2></div></div><div class="current-match-grid">{% for match in live_matches %}{{ current_match_card(match) }}{% endfor %}</div></section>{% endif %}
-  <div class="tournament-detail-grid">
-    <main>
-      <section class="page-section compact"><div class="section-head"><div><p class="eyebrow">LATEST IN THE ARCHIVE</p><h2>Recent matches<span>.</span></h2></div><a class="section-link" href="{{ url_for('site.matches', q=tournament, tour=tour) }}">View all matches</a></div><div class="archive-match-grid">{% for match in matches %}{{ archive_match_card(match, match_location) }}{% endfor %}</div></section>
-    </main>
-    <aside class="tournament-sidebar">
-      <section><p class="eyebrow">TITLE LEADERS</p><h2>Champions<span>.</span></h2>{% if champions %}<ol class="champion-leaders">{% for item in champions %}<li><a href="{{ url_for('site.player_detail', player_id=item.player.id) }}">{{ item.player.name }}</a><strong>{{ item.titles }}</strong></li>{% endfor %}</ol>{% else %}<p class="muted">Finals are not available in this catalog yet.</p>{% endif %}</section>
-      <section><p class="eyebrow">RECENT FINALS</p>{% if finals %}<div class="tournament-finals">{% for final in finals[:8] %}<a href="{{ url_for('site.match_detail', match_id=final.id) }}"><time>{{ final.week_start.year }}</time><span><strong>{{ final.winner.name }}</strong><small>def. {{ final.loser.name }}</small></span></a>{% endfor %}</div>{% endif %}</section>
-      {% if profile.official_url %}<a class="button button-outline tournament-official" href="{{ profile.official_url }}" target="_blank" rel="noopener noreferrer">Official tournament site</a>{% endif %}
-    </aside>
+<div class="tournament-page surface-{{ (surfaces|first)|lower }}" data-tournament-theme-root data-tournament-theme="court">
+  <section class="tournament-hero">
+    <img src="{{ profile.image_url }}" alt="Trophy associated with {{ tournament }}" referrerpolicy="no-referrer">
+    <span class="tournament-hero-shade" aria-hidden="true"></span>
+    <div class="container tournament-hero-content">
+      <div class="tournament-hero-tools"><a class="back-link" href="{{ url_for('site.tournaments') }}">ALL TOURNAMENTS</a><div class="tournament-theme-switcher" role="group" aria-label="Tournament page design"><button type="button" data-tournament-theme="court" aria-pressed="true">Court</button><button type="button" data-tournament-theme="classic" aria-pressed="false">Classic</button><button type="button" data-tournament-theme="trophy" aria-pressed="false">Trophy</button></div></div>
+      <div class="tournament-hero-copy"><p class="eyebrow">{{ tour }} · {{ value_label }} · {{ surfaces|join(' / ') }}</p><h1>{{ tournament }}<span>.</span></h1><p>{{ profile.summary }}</p><div class="tournament-hero-meta"><span>{{ profile.location }}</span>{% if profile.founded %}<span>Founded {{ profile.founded }}</span>{% endif %}<span>{{ years|length }} seasons in Tennisd</span></div></div>
+      <div class="tournament-follow-row">
+        {% if current_user.is_authenticated and subscriptions_ready %}<form method="post" action="{{ url_for('site.toggle_tournament_subscription', tour=tour|lower, slug=request.view_args.slug) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="button tournament-follow-button{% if subscribed %} is-following{% endif %}" type="submit">{{ 'Following tournament' if subscribed else '+ Follow tournament' }}</button></form>{% elif not current_user.is_authenticated %}<a class="button tournament-follow-button" href="{{ url_for('site.login', next=request.path) }}">+ Follow tournament</a>{% endif %}
+        <span>{{ subscriber_count }} {{ 'follower' if subscriber_count == 1 else 'followers' }}</span>
+      </div>
+      <small>Image: <a href="{{ profile.image_page }}" target="_blank" rel="noopener noreferrer">{{ profile.image_credit }}</a></small>
+    </div>
+  </section>
+  <div class="container tournament-detail">
+    <section class="tournament-facts" aria-label="Tournament archive overview"><article><strong>{{ '{:,}'.format(total_matches) }}</strong><span>matches</span></article><article><strong>{{ years[-1] if years else '—' }}—{{ years[0] if years else '—' }}</strong><span>catalog span</span></article><article><strong>{{ surfaces|join(' / ') }}</strong><span>surfaces</span></article><article><strong>{{ value_group }}</strong><span>tournament value</span></article></section>
+    {% if live_matches %}<section class="page-section compact"><div class="section-head"><div><p class="eyebrow">ON TOUR NOW</p><h2>Live & upcoming<span>.</span></h2></div></div><div class="current-match-grid">{% for match in live_matches %}{{ current_match_card(match) }}{% endfor %}</div></section>{% endif %}
+    <div class="tournament-detail-grid">
+      <main><section class="page-section compact"><div class="section-head"><div><p class="eyebrow">LATEST IN THE ARCHIVE</p><h2>Recent matches<span>.</span></h2></div><a class="section-link" href="{{ url_for('site.matches', q=tournament, tour=tour) }}">View all matches</a></div><div class="archive-match-grid">{% for match in matches %}{{ archive_match_card(match, match_location) }}{% endfor %}</div></section></main>
+      <aside class="tournament-sidebar">
+        <section><p class="eyebrow">TITLE LEADERS</p><h2>Champions<span>.</span></h2>{% if champions %}<ol class="champion-leaders">{% for item in champions %}<li><a href="{{ url_for('site.player_detail', player_id=item.player.id) }}">{{ item.player.name }}</a><strong>{{ item.titles }}</strong></li>{% endfor %}</ol>{% else %}<p class="muted">Finals are not available in this catalog yet.</p>{% endif %}</section>
+        <section><p class="eyebrow">RECENT FINALS</p>{% if finals %}<div class="tournament-finals">{% for final in finals[:8] %}<a href="{{ url_for('site.match_detail', match_id=final.id) }}"><time>{{ final.week_start.year }}</time><span><strong>{{ final.winner.name }}</strong><small>def. {{ final.loser.name }}</small></span></a>{% endfor %}</div>{% endif %}</section>
+        {% if profile.official_url %}<a class="button button-outline tournament-official" href="{{ profile.official_url }}" target="_blank" rel="noopener noreferrer">Official tournament site</a>{% endif %}
+      </aside>
+    </div>
   </div>
 </div>
 {% endblock %}

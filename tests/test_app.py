@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 
 from PIL import Image
 from tennisd import create_app, db
-from tennisd.models import Comment, FollowedPlayer, Match, Player, ProfileImage, Report, Review, User, WatchlistItem
+from tennisd.models import Comment, FollowedPlayer, Match, Player, ProfileImage, Report, Review, TournamentSubscription, User, WatchlistItem
 from tennisd.news_feed import NEWS_SOURCES, curate_news_items, fetch_news_items
 from tennisd.routes import normalized_person_name, wikimedia_player_photo
 from tennisd.tournament_catalog import tournament_slug
@@ -81,6 +81,10 @@ class TennisdFlows(unittest.TestCase):
         tournaments = self.client.get("/tournaments")
         self.assertIn(b"Go straight to a tournament", tournaments.data)
         self.assertIn(b"tournament-browser", tournaments.data)
+        self.assertIn(b"Main tournaments", tournaments.data)
+        self.assertIn(b"tournament-card-trophy", tournaments.data)
+        self.assertNotIn(b"trophy-mark", tournaments.data)
+        self.assertIn(b"Tournament value", tournaments.data)
         tournament_path = (
             f"/tournaments/{self.tournament_tour.lower()}/"
             f"{tournament_slug(self.tournament_name)}"
@@ -90,12 +94,15 @@ class TennisdFlows(unittest.TestCase):
         self.assertIn(b"tournament-hero", tournament.data)
         self.assertIn(b"TITLE LEADERS", tournament.data)
         self.assertIn(b"Image:", tournament.data)
+        self.assertIn(b'data-tournament-theme="court"', tournament.data)
+        self.assertIn(b"+ Follow tournament", tournament.data)
         jump = self.client.get(
             "/tournaments", query_string={
                 "event": f"{self.tournament_tour}|{tournament_slug(self.tournament_name)}"
             },
         )
         self.assertEqual(jump.headers["Location"], tournament_path)
+
         news = self.client.get("/news?source=wta")
         self.assertIn(b"news-feed-section", news.data)
         self.assertIn(b'aria-current="page">WTA</a>', news.data)
@@ -116,6 +123,31 @@ class TennisdFlows(unittest.TestCase):
         profile = self.client.get(f"/players/{player_id}")
         self.assertIn(b"player-hero-photo", profile.data)
         self.assertIn(f"/players/{player_id}/photo".encode(), profile.data)
+
+    def test_tournament_follow_is_saved_and_shown_in_profile(self):
+        self.register("alice")
+        tournament_path = (
+            f"/tournaments/{self.tournament_tour.lower()}/"
+            f"{tournament_slug(self.tournament_name)}"
+        )
+        response = self.client.post(f"{tournament_path}/subscribe", data={
+            "csrf_token": self.token(),
+        }, follow_redirects=True)
+        self.assertIn(b"Following tournament", response.data)
+        with self.app.app_context():
+            self.assertIsNotNone(db.session.scalar(select(TournamentSubscription.id)))
+        profile = self.client.get("/u/alice")
+        self.assertIn(b"Tournaments you follow", profile.data)
+        self.assertIn(self.tournament_name.encode(), profile.data)
+        exported = self.client.get("/settings/export").get_json()
+        self.assertEqual(exported["followed_tournaments"][0]["tournament"], self.tournament_name)
+
+        response = self.client.post(f"{tournament_path}/subscribe", data={
+            "csrf_token": self.token(),
+        }, follow_redirects=True)
+        self.assertIn(b"+ Follow tournament", response.data)
+        with self.app.app_context():
+            self.assertIsNone(db.session.scalar(select(TournamentSubscription.id)))
 
     def test_wikidata_portrait_and_accented_player_name(self):
         response = Mock()
