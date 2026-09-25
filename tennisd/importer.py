@@ -71,9 +71,19 @@ def import_rows(tour, rows, bios=None):
     existing = set(
         db.session.scalars(select(Match.id).where(Match.id.in_(candidate_ids))).all()
     ) if candidate_ids else set()
+    source_ids = {
+        source_id
+        for row in rows
+        for source_id in (row.get("winner_id"), row.get("loser_id"))
+        if source_id
+    }
+    player_ids = [f"{tour.lower()}-{source_id}" for source_id in source_ids]
+    players = {
+        player.id: player
+        for player in db.session.scalars(select(Player).where(Player.id.in_(player_ids))).all()
+    } if player_ids else {}
     added = 0
     bios = bios or {}
-    players = {}
     for row in rows:
         winner_source_id = row.get("winner_id")
         loser_source_id = row.get("loser_id")
