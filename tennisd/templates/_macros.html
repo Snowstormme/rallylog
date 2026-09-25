@@ -3,7 +3,7 @@
   <div class="match-card-top"><span class="pill pill-{{ match.tour|lower }}">{{ match.tour }}</span><span>{{ match.week_start.year }} · {{ match.surface }}</span></div>
   <div class="match-card-event">{{ match.tournament }} <span>· {{ match.round }}</span></div>
   <div class="match-card-players"><span class="winner"><span class="winner-dot"></span>{{ match.winner.name }}</span><span>{{ match.loser.name }}</span></div>
-  <div class="match-card-bottom"><span>{{ match.score }}</span>{% if review %}<span class="card-rating">★ {{ '%.1f'|format(review.rating_half / 2) if review.rating_half else 'Logged' }}</span>{% endif %}</div>
+  <div class="match-card-bottom"><span>{{ match.score }}</span>{% if review %}<span class="card-rating">{% if review.rating_half %}★ {{ review.rating_half }}/10{% else %}Logged{% endif %}</span>{% endif %}</div>
 </a>
 {% endmacro %}
 

@@ -869,7 +869,7 @@ def export_diary():
                 "match": f"{review.match.winner.name} vs {review.match.loser.name}",
                 "tournament": review.match.tournament,
                 "watched_on": review.watched_on.isoformat(),
-                "rating_out_of_five": review.rating_half / 2 if review.rating_half else None,
+                "rating_out_of_ten": review.rating_half,
                 "review": review.body,
                 "favorite": review.is_favorite,
                 "public": review.is_public,

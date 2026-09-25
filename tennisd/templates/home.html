@@ -43,7 +43,7 @@
 
 <section class="container home-section community-home">
   <div class="section-head"><div><p class="eyebrow">AROUND THE COURT</p><h2>From the community<span>.</span></h2></div></div>
-  {% if recent_reviews %}<div class="home-reviews">{% for review in recent_reviews %}<a class="home-review" href="{{ url_for('site.match_detail', match_id=review.match_id) }}#review-{{ review.id }}">{{ user_avatar(review.user, 'mini-avatar') }}<span><strong>{{ review.user.display_name }}</strong> watched <b>{{ review.match.winner.name }} vs {{ review.match.loser.name }}</b><small>{{ review.match.tournament }} · {{ review.watched_on.strftime('%d %b %Y') }}</small></span><span class="home-review-rating">{{ '★ %.1f'|format(review.rating_half / 2) if review.rating_half else 'Logged' }}</span></a>{% endfor %}</div>
+  {% if recent_reviews %}<div class="home-reviews">{% for review in recent_reviews %}<a class="home-review" href="{{ url_for('site.match_detail', match_id=review.match_id) }}#review-{{ review.id }}">{{ user_avatar(review.user, 'mini-avatar') }}<span><strong>{{ review.user.display_name }}</strong> watched <b>{{ review.match.winner.name }} vs {{ review.match.loser.name }}</b><small>{{ review.match.tournament }} · {{ review.watched_on.strftime('%d %b %Y') }}</small></span><span class="home-review-rating">{% if review.rating_half %}★ {{ review.rating_half }}/10{% else %}Logged{% endif %}</span></a>{% endfor %}</div>
   {% else %}<div class="empty-state"><h3>The first story is yours to tell.</h3><p>Log a match and the community feed will come alive.</p><a class="text-link" href="{{ url_for('site.matches') }}">Find a match</a></div>{% endif %}
 </section>
 {% endblock %}

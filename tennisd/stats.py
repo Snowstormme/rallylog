@@ -1,8 +1,6 @@
 """Small, transparent summaries calculated from the matches loaded into the catalog."""
 
 from collections import Counter, defaultdict
-from math import ceil
-
 from sqlalchemy import or_, select
 from sqlalchemy.orm import joinedload
 
@@ -87,18 +85,18 @@ def community_statistics(match):
     reviews = db.session.scalars(
         select(Review).where(Review.match_id == match.id, Review.is_public.is_(True))
     ).all()
-    ratings = [review.rating_half / 2 for review in reviews if review.rating_half is not None]
+    ratings = [review.rating_half for review in reviews if review.rating_half is not None]
     return {
         "average": round(sum(ratings) / len(ratings), 1) if ratings else None,
         "count": len(ratings),
         "logs": len(reviews),
-        "distribution": {score: sum(rating == score for rating in ratings) for score in (5, 4, 3, 2, 1)},
+        "distribution": {score: sum(rating == score for rating in ratings) for score in range(10, 0, -1)},
     }
 
 
 def diary_statistics(reviews):
     reviews = list(reviews)
-    ratings = [review.rating_half / 2 for review in reviews if review.rating_half is not None]
+    ratings = [review.rating_half for review in reviews if review.rating_half is not None]
     surfaces = Counter(review.match.surface for review in reviews)
     tours = Counter(review.match.tour for review in reviews)
     players = Counter()
@@ -109,12 +107,12 @@ def diary_statistics(reviews):
         "logs": len(reviews),
         "favorites": sum(review.is_favorite for review in reviews),
         "average": round(sum(ratings) / len(ratings), 1) if ratings else None,
-        "average_ten": round(sum(rating * 2 for rating in ratings) / len(ratings), 1) if ratings else None,
+        "average_ten": round(sum(ratings) / len(ratings), 1) if ratings else None,
         "surfaces": surfaces.most_common(),
         "tours": tours.most_common(),
         "players": players.most_common(5),
         "years": Counter(review.watched_on.year for review in reviews).most_common(),
-        "rating_bands": [(stars, sum(ceil(rating) == stars for rating in ratings)) for stars in range(5, 0, -1)],
+        "rating_bands": [(score, sum(rating == score for rating in ratings)) for score in range(10, 0, -1)],
         "rating_scale": [(score, sum(review.rating_half == score for review in reviews)) for score in range(1, 11)],
         "rated_count": len(ratings),
     }
